@@ -46,3 +46,5 @@ do
     fi
     sudo mv ./_out/setup_1/$episode $data_dir/test_$i
 done
+
+echo "Need to call tools/process_carladata.py to post-process the collected data."

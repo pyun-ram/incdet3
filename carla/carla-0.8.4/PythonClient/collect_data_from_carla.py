@@ -150,9 +150,6 @@ def make_carla_settings(args):
 		num_of_ped = 100
 	else:
 		num_of_ped = 0
-	print(num_of_ped)
-	import sys
-	sys.exit("DEBUG")
 	settings.set(
 		SynchronousMode=False,
 		SendNonPlayerAgentsInfo=True,
@@ -191,7 +188,7 @@ def make_carla_settings(args):
 			Channels=64,
 			Range=100,
 			PointsPerSecond=250000,
-			RotationFrequency=10,
+			RotationFrequency=30,
 			UpperFovLimit=2,
 			LowerFovLimit=-24.8)
 		settings.add_sensor(velo)
