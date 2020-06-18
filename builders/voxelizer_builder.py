@@ -28,6 +28,8 @@ if __name__ == "__main__":
         "@voxel_size": [0.05, 0.05, 0.1],
         "@point_cloud_range": [0, -40, -3, 70.4, 40, 1],
         "@max_num_points": 5,
-        "@max_voxels": 20000
+        "@max_voxels": 100000
         }
     voxelizer = build(voxelizer_cfg)
+    print(dir(voxelizer))
+    print(voxelizer._max_voxels)

@@ -4,6 +4,7 @@ The gt_database temporally is not needed, but will be added for including exempl
 Otherpart can be inherited from mlod project.
 '''
 from det3.utils.utils import load_pickle
+from det3.ops import read_npy
 from incdet3.data.carlaeval import get_eval_result
 
 class CarlaDataset:
@@ -36,7 +37,7 @@ class CarlaDataset:
         label = info["label"]
         tag = info["tag"]
         img_path = info["img_path"]
-        pc_dict = {velo: read_pc_from_file(pc_path) for velo, pc_path in info["pc_paths"].items()}
+        pc_dict = {velo: read_npy(pc_path) for velo, pc_path in info["pc_paths"].items()}
         res = {
             "lidar":{
                 "points": pc_dict,

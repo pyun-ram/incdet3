@@ -1,5 +1,10 @@
 import numpy as np
+from det3.dataloader.carladata import Frame
 from det3.dataloader.augmentor import CarlaAugmentor
+from det3.methods.second.ops.ops import rbbox2d_to_near_bbox
+from incdet3.utils import (filt_label_by_cls,
+    filt_label_by_num_of_pts,
+    filt_label_by_range)
 
 def get_pc_from_dict(pc_dict_FIMU: dict):
     '''
@@ -14,65 +19,23 @@ def db_sampling(pc,
                 db_sampler,
                 gt_calib,
                 gt_label,
-                training: bool,
-                single_lidar: (None, str),
-                multi_lidar: (None, str)):
+                training: bool,):
     '''
     sampling from db to augment label
     @pc: np.array
     @db_sampler: DBSampler
     @gt_calib: CarlaCalib
     @gt_label: CarlaLabel
-    @single_lidar: None or str
-    @multi_lidar: None or str
     @training: bool
     ->label: [CarlaObj]
     ->calib: [None/CarlaCalib]
     ->pc: np.array
         None if the according obj is the original copy from gt.
+    Note: this function provides an api for the exemplar improvement (as ICaRL).
     '''
     if not training or db_sampler is None:
         return  gt_label, [gt_calib] * len(gt_label.data), pc
-    sample_res = db_sampler.sample(gt_label=gt_label,
-                                   gt_calib=gt_calib)
-    for i in range(sample_res["num_obj"]):
-        obj = sample_res["res_label"].data[i]
-        obj_calib = sample_res["calib_list"][i]
-        objpc = sample_res["objpc_list"][i]
-        is_gt = sample_res["gt_mask"][i]
-        if is_gt:
-            continue
-        if single_lidar is not None:
-            objpc = objpc[single_lidar]
-            mask = obj.get_pts_idx(pc[:, :3], obj_calib)
-            mask = np.logical_not(mask)
-            pc = pc[mask, :]
-            pc = np.vstack([pc, objpc])
-            np.random.shuffle(pc)
-        elif multi_lidar == "merge":
-            objpc = np.vstack([v for k, v in objpc.items()])
-            mask = obj.get_pts_idx(pc[:, :3], obj_calib)
-            mask = np.logical_not(mask)
-            pc = pc[mask, :]
-            pc = np.vstack([pc, objpc])
-            np.random.shuffle(pc)
-        elif multi_lidar in ["split", "split+merge"]:
-            for velo_ in pc.keys():
-                objpc_ = (np.vstack([v for k, v in objpc.items()])
-                    if velo_ == "merge" else objpc[velo_])
-                pc_ = pc[velo_].copy()
-                mask = obj.get_pts_idx(pc_[:, :3], obj_calib)
-                mask = np.logical_not(mask)
-                pc_ = pc_[mask, :]
-                pc_ = np.vstack([pc_, objpc_])
-                np.random.shuffle(pc_)
-                pc[velo_] = pc_
-        else:
-            raise NotImplementedError
-    calib = [itm if itm is not None else gt_calib
-             for itm in sample_res["calib_list"]]
-    label = sample_res["res_label"]
-    return label, calib, pc
+    raise NotImplementedError
 
 def augmenting(pc,
                calib,
@@ -100,9 +63,7 @@ def augmenting(pc,
 def label_filtering(pc,
                     calib,
                     label,
-                    filter_label_dict,
-                    single_lidar,
-                    multi_lidar):
+                    filter_label_dict):
     '''
     @pc: np.array or dict
     @calib: CarlaCalib or list
@@ -119,9 +80,6 @@ def label_filtering(pc,
         if label.data is None:
             label.data = []
         return label
-    from mlod.utils import (filt_label_by_cls,
-        filt_label_by_num_of_pts,
-        filt_label_by_range)
     # by class
     if "keep_classes" in filter_label_dict.keys():
         keep_classes = filter_label_dict["keep_classes"]
@@ -129,12 +87,7 @@ def label_filtering(pc,
     # by num of pts
     if "min_num_pts" in filter_label_dict.keys():
         min_num_pts = filter_label_dict["min_num_pts"]
-        if single_lidar is not None or multi_lidar == "merge":
-            label = filt_label_by_num_of_pts(pc, calib, label, min_num_pts)
-        elif multi_lidar == "split" or multi_lidar == "split+merge":
-            label = filt_label_by_num_of_pts(pc["merge"], calib, label, min_num_pts)
-        else:
-            raise NotImplementedError
+        label = filt_label_by_num_of_pts(pc, calib, label, min_num_pts)
     # by range
     if "label_range" in filter_label_dict.keys():
         valid_range = filter_label_dict["label_range"]
@@ -142,16 +95,8 @@ def label_filtering(pc,
     return label
 
 def voxelizing(pc,
-               voxelizer,
-               max_voxels,
-               single_lidar,
-               multi_lidar):
-    if single_lidar is not None or multi_lidar == "merge":
-        vox_res = voxelizer.generate(pc, max_voxels)
-    else:
-        vox_res = dict()
-        for velo in pc.keys():
-            vox_res[velo] = voxelizer.generate(pc[velo], max_voxels)
+               voxelizer):
+    vox_res = voxelizer.generate(pc, voxelizer._max_voxels)
     return vox_res
 
 def anchor_creating(target_assigner,
@@ -165,7 +110,6 @@ def anchor_creating(target_assigner,
         unmatched_thresholds = anchor_cache["unmatched_thresholds"]
 
     else:
-        from det3.methods.second.ops.ops import rbbox2d_to_near_bbox
         ret = target_assigner.generate_anchors(feature_map_size)
         anchors = ret["anchors"]
         anchors = anchors.reshape([-1, target_assigner.box_ndim])
@@ -202,7 +146,6 @@ def target_assigning(target_assigner,
     return targets_dict
 
 def carlalabel2gt_dict(carlalabel, class_names, calib_list) -> dict:
-    from det3.dataloader.carladata import Frame
     assert carlalabel.current_frame == Frame.IMU
     if not (carlalabel.data is None or carlalabel.data == []):
         gt_boxes = carlalabel.bboxes3d
@@ -233,15 +176,13 @@ def carlalabel2gt_dict(carlalabel, class_names, calib_list) -> dict:
 
 def prep_pointcloud(input_dict,
                     training: bool,
-                    db_sampler,
                     augment_dict,
                     filter_label_dict,
                     voxelizer,
-                    max_voxels,
                     anchor_cache,
                     feature_map_size,
                     target_assigner,
-                    calib_uct_param=0):
+                    db_sampler=None,):
     '''
     input_dict:
         {
@@ -260,20 +201,19 @@ def prep_pointcloud(input_dict,
             }
         }
     '''
-    pc_dict_Flidar = input_dict["lidar"]["points"]
+    tag = input_dict["metadata"]["tag"]
+    gt_calib = input_dict["calib"]
     gt_label = input_dict["imu"]["label"]
+    pc_dict_Flidar = input_dict["lidar"]["points"]
     pc_dict_FIMU = {k: gt_calib.lidar2imu(v[:,:3], key=f'Tr_imu_to_{k}')
                     for k, v in pc_dict_Flidar.items()}
-    tag = input_dict["metadata"]["tag"]
-    pc = get_pc_from_dict(pc_dict_FIMU, single_lidar, multi_lidar)
+    pc = get_pc_from_dict(pc_dict_FIMU)
 
-    # label, calib, pc = db_sampling(pc=pc,
-    #                                gt_calib=gt_calib,
-    #                                gt_label=gt_label,
-    #                                single_lidar=single_lidar,
-    #                                multi_lidar=multi_lidar,
-    #                                training=training,
-    #                                db_sampler=db_sampler)
+    label, calib, pc = db_sampling(pc=pc,
+                                   gt_calib=gt_calib,
+                                   gt_label=gt_label,
+                                   training=training,
+                                   db_sampler=None)
     label, pc = augmenting(pc=pc,
                            calib=calib,
                            label=label,
@@ -282,14 +222,9 @@ def prep_pointcloud(input_dict,
     label = label_filtering(pc=pc,
                             calib=calib,
                             label=label,
-                            filter_label_dict=filter_label_dict,
-                            single_lidar=single_lidar,
-                            multi_lidar=multi_lidar,)
+                            filter_label_dict=filter_label_dict)
     vox_res = voxelizing(pc=pc,
-                         voxelizer=voxelizer,
-                         max_voxels=max_voxels,
-                         single_lidar=single_lidar,
-                         multi_lidar=multi_lidar)
+                         voxelizer=voxelizer)
     anchor_res = anchor_creating(target_assigner=target_assigner,
                                  feature_map_size=feature_map_size,
                                  anchor_cache=anchor_cache)
@@ -316,116 +251,39 @@ def prep_pointcloud(input_dict,
     return example
 
 if __name__ == "__main__":
+    from incdet3.data.carladataset import CarlaDataset
+    from incdet3.configs.dev_cfg import cfg
+    from incdet3.builders import voxelizer_builder, target_assigner_builder
     from functools import partial
     from tqdm import tqdm
-    from det3.utils.utils import load_pickle
-    from incdet3.data.carladataset import CarlaDataset
-    from det3.methods.second.builder.target_assigner_builder import build_multiclass as build_target_assigner
-    from incdet3.builders.voxelizer_builder import build as build_voxelizer
-    from incdet3.builders.target_assigner_builder import build_box_coder
-    def deg2rad(deg):
-        return deg / 180 * np.pi
-    root_path = "/usr/app/data/CARLA/training"
-    info_path = "/usr/app/data/CARLA/CARLA_infos_dev.pkl"
-    class_names = ["Car"]
-    training = True
-    augment_dict = {
-        "p_rot": 0.25,
-        "dry_range": [deg2rad(-45), deg2rad(45)],
-        "p_tr": 0.25,
-        "dx_range": [-1, 1],
-        "dy_range": [-1, 1],
-        "dz_range": [-0.1, 0.1],
-        "p_flip": 0.25,
-        "p_keep": 0.25
-    }
-    voxelizer_cfg = {
-        "type": "VoxelizerV1",
-        "@voxel_size": [0.05, 0.05, 0.1],
-        "@point_cloud_range": [-35.2, -40, -1.5, 35.2, 40, 2.6],
-        "@max_num_points": 5,
-        "@max_voxels": 100000
-    }
-    target_assigner_cfg = {
-    "type": "TaskAssignerV1",
-    "sample_size": 512,
-    "assign_per_class": True,
-    "classes": ["Car"],
-    "class_settings_car": {
-        "AnchorGenerator": {
-            "type": "AnchorGeneratorBEV",
-            "class_name": "Car",
-            "anchor_ranges": [-35.2, -40, 0, 35.2, 40, 0],
-            "sizes": [1.6, 3.9, 1.56], # wlh
-            "rotations": [0, 1.57],
-            "match_threshold": 0.6,
-            "unmatch_threshold": 0.45,
-        },
-        "SimilarityCalculator": {
-            "type": "NearestIoUSimilarity"
-        }
-    },
-    "feature_map_sizes": None,
-    "positive_fraction": None,
-    }
-    box_coder_cfg = {
-        "type": "BoxCoderV1",
-        "custom_ndim": 0,
-    }
-    filter_label_dict = {"keep_classes": ["Car"],
-                         "min_num_pts": 5,
-                         "label_range": [-35.2, -40, -1.5, 35.2, 40, 2.6]
-                        }
-    # build dataset
+    dataset_cfg = cfg.TRAINDATA
+    root_path = dataset_cfg["@root_path"]
+    info_path = dataset_cfg["@info_path"]
+    class_names = dataset_cfg["@class_names"]
     dataset = CarlaDataset(root_path=root_path,
         info_path=info_path,
-        class_names=class_names)
-    # build voxlizer
-    voxelizer = build_voxelizer(det3_root_dir="/usr/app/det3",
-        voxelizer_cfg=voxelizer_cfg)
-    # build box_coder
-    box_coder = build_box_coder(det3_root_dir="/usr/app/det3",
-        box_coder_cfg=box_coder_cfg)
-    # build target_assigner
-    target_assigner = build_target_assigner(target_assigner_cfg=target_assigner_cfg,
-        box_coder=box_coder)
-    # setup parameters
-    grid_size = voxelizer.grid_size
-    out_size_factor = 2
-    feature_map_size = grid_size[:2] // out_size_factor
-    feature_map_size = [*feature_map_size, 1][::-1]
-    from det3.methods.second.ops.ops import rbbox2d_to_near_bbox
-    ret = target_assigner.generate_anchors(feature_map_size)
-    class_names = target_assigner.classes
-    anchors_dict = target_assigner.generate_anchors_dict(feature_map_size)
-    anchors_list = []
-    for k, v in anchors_dict.items():
-        anchors_list.append(v["anchors"])
-    anchors = np.concatenate(anchors_list, axis=0)
-    anchors = anchors.reshape([-1, target_assigner.box_ndim])
-    assert np.allclose(anchors, ret["anchors"].reshape(-1, target_assigner.box_ndim))
-    matched_thresholds = ret["matched_thresholds"]
-    unmatched_thresholds = ret["unmatched_thresholds"]
-    anchors_bv = rbbox2d_to_near_bbox(
-        anchors[:, [0, 1, 3, 4, 6]])
-    anchor_cache = {
-        "anchors": anchors,
-        "anchors_bv": anchors_bv,
-        "matched_thresholds": matched_thresholds,
-        "unmatched_thresholds": unmatched_thresholds,
-        "anchors_dict": anchors_dict,
-    }
+        class_names=class_names,
+        prep_func=None)
+    prep_cfg = dataset_cfg["prep"]
+    training = prep_cfg["@training"]
+    augment_dict = prep_cfg["@augment_dict"]
+    filter_label_dict = prep_cfg["@filter_label_dict"]
+    voxelizer = voxelizer_builder.build(cfg.VOXELIZER)
+    target_assigner = target_assigner_builder.build(cfg.TARGETASSIGNER)
+    anchor_cache = anchor_creating(target_assigner,
+        feature_map_size=[1, 200, 176],
+        anchor_cache=None)
     prep_func = partial(prep_pointcloud,
-                        training=True,
-                        db_sampler=db_sampler,
-                        augment_dict=augment_dict,
-                        filter_label_dict=filter_label_dict,
-                        voxelizer=voxelizer,
-                        max_voxels=None,
-                        anchor_cache=anchor_cache,
-                        feature_map_size=feature_map_size,
-                        target_assigner=target_assigner)
-    for i in tqdm(range(10)):
+                    training=training,
+                    augment_dict=augment_dict,
+                    filter_label_dict=filter_label_dict,
+                    voxelizer=voxelizer,
+                    target_assigner=target_assigner,
+                    anchor_cache=anchor_cache,
+                    feature_map_size=None)
+    for i in tqdm(range(100)):
         input_dict = dataset.get_sensor_data(i)
         example = prep_func(input_dict)
         print(example.keys())
+        import sys
+        sys.exit("DEBUG")
