@@ -34,8 +34,8 @@ cfg.VOXELIZER = {
 
 cfg.TARGETASSIGNER = {
     "type": "TaskAssignerV1",
-    "@classes": ["Car"],
-    # "@classes": ["Car", "Pedestrian"],
+    # "@classes": ["Car"],
+    "@classes": ["Car", "Pedestrian", "Pedestrian2"],
     "@feature_map_sizes": None,
     "@positive_fraction": None,
     "@sample_size": 512,
@@ -58,89 +58,41 @@ cfg.TARGETASSIGNER = {
             "type": "NearestIoUSimilarity"
         }
     },
-    # "class_settings_pedestrian": {
-    #     "AnchorGenerator": {
-    #         "type": "AnchorGeneratorBEV",
-    #         "@class_name": "Pedestrian",
-    #         "@anchor_ranges": cfg.TASK["valid_range"].copy(), # TBD in modify_cfg(cfg)
-    #         "@sizes": [0.6, 0.8, 1.73], # wlh
-    #         "@rotations": [0, 1.57],
-    #         "@match_threshold": 0.6,
-    #         "@unmatch_threshold": 0.45,
-    #     },
-    #     "SimilarityCalculator": {
-    #         "type": "NearestIoUSimilarity"
-    #     }
-    # },
-}
-
-
-cfg.MODEL = {
-    "name": "baseline", # baseline, inputfusion, featurefusion
-    "resume": "saved_weights/MLOD-CARLACAR-TOP-B/VoxelNet-46850.tckpt",
-    "VoxelEncoder": {
-        "name": "SimpleVoxel",
-        "num_input_features": 3,
+    "class_settings_pedestrian": {
+        "AnchorGenerator": {
+            "type": "AnchorGeneratorBEV",
+            "@class_name": "Pedestrian",
+            "@anchor_ranges": cfg.TASK["valid_range"].copy(), # TBD in modify_cfg(cfg)
+            "@sizes": [0.6, 0.8, 1.73], # wlh
+            "@rotations": [0, 1.57],
+            "@match_threshold": 0.6,
+            "@unmatch_threshold": 0.45,
+        },
+        "SimilarityCalculator": {
+            "type": "NearestIoUSimilarity"
+        }
     },
-    "MiddleLayer":{
-        "name": "SpMiddleFHD",
-        "use_norm": True,
-        "num_input_features": 3,
-        "downsample_factor": 8
+    "class_settings_pedestrian2": {
+        "AnchorGenerator": {
+            "type": "AnchorGeneratorBEV",
+            "@class_name": "Pedestrian2",
+            "@anchor_ranges": cfg.TASK["valid_range"].copy(), # TBD in modify_cfg(cfg)
+            "@sizes": [0.61, 0.81, 1.731], # wlh
+            "@rotations": [0, 1.57],
+            "@match_threshold": 0.6,
+            "@unmatch_threshold": 0.45,
+        },
+        "SimilarityCalculator": {
+            "type": "NearestIoUSimilarity"
+        }
     },
-    "RPN":{
-        "name": "RPNV2",
-        "use_norm": True,
-        "use_groupnorm": False,
-        "num_groups": 0,
-        "layer_nums": [5],
-        "layer_strides": [1],
-        "num_filters": [128],
-        "upsample_strides": [1],
-        "num_upsample_filters": [128],
-        "num_input_features": 128,
-    },
-    "ClassificationLoss":{
-        "name": "SigmoidFocalClassificationLoss",
-        "alpha": 0.25,
-        "gamma": 2.0,
-    },
-    "LocalizationLoss":{
-        "name": "WeightedSmoothL1LocalizationLoss",
-        "sigma": 3.0,
-        "code_weights": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
-        "codewise": True,
-    },
-    "num_class": 1,
-    "use_sigmoid_score": True,
-    "encode_background_as_zeros": True,
-    "use_direction_classifier": True,
-    "num_direction_bins": 2,
-    "encode_rad_error_by_sin": True,
-    "post_center_range": cfg.TASK["valid_range"].copy(),
-    "nms_class_agnostic": False,
-    "direction_limit_offset": 1,
-    "sin_error_factor": 1.0,
-    "use_rotate_nms": True,
-    "multiclass_nms": False,
-    "nms_pre_max_sizes": [2000],
-    "nms_post_max_sizes": [100],
-    "nms_score_thresholds": [0.3], # 0.4 in submit, but 0.3 can get better hard performance
-    "nms_iou_thresholds": [0.2],
-    "cls_loss_weight": 1.0,
-    "loc_loss_weight": 2.0,
-    "loss_norm_type": "NormByNumPositives",
-    "direction_offset": 0.0,
-    "direction_loss_weight": 0.2,
-    "pos_cls_weight": 1.0,
-    "neg_cls_weight": 1.0,
 }
 
 cfg.TRAINDATA = {
-    "dataset": "carla", # carla, waymo
+    "dataset": "carla", # carla
     "training": True,
-    "batch_size": 6,
-    "num_workers": 6,
+    "batch_size": 1,
+    "num_workers": 1,
     "@root_path": "/usr/app/data/CARLA/training/",
     "@info_path": "/usr/app/data/CARLA/CARLA_infos_dev.pkl",
     "@class_names": cfg.TARGETASSIGNER["@classes"].copy(),
@@ -163,10 +115,76 @@ cfg.TRAINDATA = {
             "min_num_pts": 5,
             "label_range": cfg.TASK["valid_range"].copy(),
             # [min_x, min_y, min_z, max_x, max_y, max_z] FIMU
-        }
+        },
+        "@feature_map_size": None # TBD
     }
 }
 
+
+cfg.VALDATA = {
+    "dataset": "carla", # carla
+    "training": False,
+    "batch_size": 1,
+    "num_workers": 1,
+    "@root_path": "/usr/app/data/CARLA/training/",
+    "@info_path": "/usr/app/data/CARLA/CARLA_infos_dev.pkl",
+    "@class_names": cfg.TARGETASSIGNER["@classes"].copy(),
+    "prep": {
+        "@training": False,
+        "@augment_dict": None,
+        "@filter_label_dict": dict(),
+        "@feature_map_size": None # TBD
+    }
+}
+
+cfg.NETWORK = {
+    "@classes_target": ["Car", "Pedestrian", "Pedestrian2"],
+    "@classes_source": ["Car", "Pedestrian",],
+    "@model_resume_dict": {
+        "ckpt_path": "./IncDetMain-2.tckpt",
+        "num_classes": 2,
+        "num_anchor_per_loc": 4,
+        "partially_load_params": [
+            "rpn.conv_cls.weight", "rpn.conv_cls.bias",
+            "rpn.conv_box.weight", "rpn.conv_box.bias",
+            "rpn.conv_dir_cls.weight", "rpn.conv_dir_cls.bias"]
+    },
+    "@sub_model_resume_dict": {
+        "ckpt_path": "./IncDetMain-2.tckpt",
+        "num_classes": 2,
+        "num_anchor_per_loc": 4,
+        "partially_load_params": []
+    },
+    "@voxel_encoder_dict": {
+        "name": "SimpleVoxel",
+        "@num_input_features": 4,
+    },
+    "@middle_layer_dict":{
+        "name": "SpMiddleFHD",
+        "@use_norm": True,
+        "@num_input_features": 4,
+        "@output_shape": None, #TBD
+        "downsample_factor": 8
+    },
+    "@rpn_dict":{
+        "name": "ResNetRPN",
+        "@use_norm": True,
+        "@num_class": None, # TBD
+        "@layer_nums": [5],
+        "@layer_strides": [1],
+        "@num_filters": [128],
+        "@upsample_strides": [1],
+        "@num_upsample_filters": [128],
+        "@num_input_features": 128,
+        "@num_anchor_per_loc": None, # TBD
+        "@encode_background_as_zeros": True,
+        "@use_direction_classifier": True,
+        "@use_groupnorm": False,
+        "@num_groups": 0,
+        "@box_code_size": None, # TBD
+        "@num_direction_bins": 2,
+    },
+}
 def modify_cfg(cfg):
     # modify anchor ranges
     for k, v in cfg.TARGETASSIGNER.items():
