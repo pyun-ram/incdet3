@@ -48,7 +48,7 @@ class Network(nn.Module):
             "MiddleLayer": middle_layer_dict,
             "RPN": rpn_dict
         }
-        self._model = self._build_model_and_init(
+        self._model = Network._build_model_and_init(
             classes=self._classes_target,
             network_cfg=network_cfg,
             resume_dict=self._model_resume_dict,
@@ -66,7 +66,8 @@ class Network(nn.Module):
         self.register_buffer("global_step", torch.LongTensor(1).zero_())
         raise NotImplementedError
 
-    def _build_model_and_init(self,
+    @staticmethod
+    def _build_model_and_init(
         classes,
         network_cfg,
         name,
@@ -77,7 +78,6 @@ class Network(nn.Module):
             "middle_layer": nn.Module,
             "RPN": nn.Module
         }
-        TODO: Prblem is how to partially load parameters for FC?
         '''
         # build vfe layer
         vfe_cfg = network_cfg["VoxelEncoder"]
@@ -102,7 +102,6 @@ class Network(nn.Module):
         rpn_name = rpn_cfg["name"]
         rpn_cfg["@num_class"] = len(classes)
         rpn_cfg["@num_anchor_per_loc"] =  len(classes) * 2 # two anchors for each class
-        print(rpn_cfg)
         if rpn_name in ["RPNV2", "ResNetRPN"]:
             param = {proc_param(k): v
                 for k, v in rpn_cfg.items() if is_param(k)}
@@ -116,11 +115,11 @@ class Network(nn.Module):
         })
         model.name = name
         # after initilization, both middle_layer and rpn have been initialized with kaiming norm.
-        self.load_weights(model, resume_dict)
+        Network.load_weights(model, resume_dict)
         return model
 
+    @staticmethod
     def load_weights(
-        self,
         model,
         resume_dict):
         '''
@@ -174,7 +173,8 @@ class Network(nn.Module):
                 raise NotImplementedError
             new_tmp = new_tmp.reshape(new_shape).contiguous()
             return new_tmp
-
+        if resume_dict is None:
+            return
         ckpt_path = resume_dict["ckpt_path"]
         old_num_classes = resume_dict["num_classes"]
         old_num_anchor_per_loc = resume_dict["num_anchor_per_loc"]
@@ -186,7 +186,6 @@ class Network(nn.Module):
             32: {"num_classes": 4, "num_anchor_per_loc": 8},
             50: {"num_classes": 5, "num_anchor_per_loc": 10},
         }
-        bool_partially_load = len(partially_load_params) == 0
         if ckpt_path is None:
             return
         if not Path(ckpt_path).is_file():
@@ -214,7 +213,8 @@ class Network(nn.Module):
         Logger.log_txt("Missing Keys {}.".format(missing_keys))
         Logger.log_txt("Unexpected Keys from {}.".format(unexpected_keys))
 
-    def save_weight(self, model, save_dir, itr):
+    @staticmethod
+    def save_weight(model, save_dir, itr):
         save_models(save_dir, [model],
             itr, max_to_keep=float('inf'))
         Logger.log_txt("Saving parameters to {}".format(save_dir))

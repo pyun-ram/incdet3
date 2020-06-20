@@ -1,0 +1,10 @@
+{
+  "latest_ckpt": {
+    "IncDetTest": "IncDetTest-2.tckpt"
+  },
+  "all_ckpts": {
+    "IncDetTest": [
+      "IncDetTest-2.tckpt"
+    ]
+  }
+}

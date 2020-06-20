@@ -52,6 +52,26 @@ def _worker_init_fn(worker_id):
     np.random.seed(123 + worker_id)
     print(f"WORKER {worker_id} seed:", np.random.get_state()[1][0])
 
+def example_convert_to_torch(example, dtype=torch.float32,
+                             device=None) -> dict:
+    device = device or torch.device("cuda:0")
+    example_torch = {}
+    float_names = [
+        "voxels", "anchors", "reg_targets", "reg_weights", "bev_map", "importance",
+    ]
+    for k, v in example.items():
+        if k in float_names:
+            # slow when directly provide fp32 data with dtype=torch.half
+            example_torch[k] = torch.tensor(
+                v, dtype=torch.float32, device=device).to(dtype)
+        elif k in ["coordinates", "labels", "num_points"]:
+            example_torch[k] = torch.tensor(
+                v, dtype=torch.int32, device=device)
+        elif k == "num_voxels":
+            example_torch[k] = torch.tensor(v)
+        else:
+            example_torch[k] = v
+    return example_torch
 
 def merge_batch(batch_list):
     from collections import defaultdict
@@ -133,8 +153,9 @@ if __name__ == "__main__":
     from incdet3.configs.dev_cfg import cfg
     from incdet3.builders import voxelizer_builder, target_assigner_builder
     from tqdm import tqdm
-    data_cfg = cfg.VALDATA
+    data_cfg = cfg.TRAINDATA
     voxelizer = voxelizer_builder.build(cfg.VOXELIZER)
+    print(voxelizer.grid_size)
     target_assigner = target_assigner_builder.build(cfg.TARGETASSIGNER)
     dataloader = build(data_cfg,
         ext_dict={
@@ -143,4 +164,9 @@ if __name__ == "__main__":
             "feature_map_size": [1, 200, 176]
         })
     for data in dataloader:
+        data = example_convert_to_torch(data)
         print(data.keys())
+        print(type(data["voxels"]))
+    # from det3.utils.utils import save_pickle
+    # save_path = "./unit_tests/data/test_build_model_and_init.pkl"
+    # save_pickle(data, save_path)

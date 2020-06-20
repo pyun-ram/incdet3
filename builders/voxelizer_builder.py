@@ -26,10 +26,11 @@ if __name__ == "__main__":
     voxelizer_cfg = {
         "type": "VoxelizerV1",
         "@voxel_size": [0.05, 0.05, 0.1],
-        "@point_cloud_range": [0, -40, -3, 70.4, 40, 1],
+        "@point_cloud_range":  [-35.2, -40, -1.5, 35.2, 40, 2.6],
         "@max_num_points": 5,
         "@max_voxels": 100000
         }
     voxelizer = build(voxelizer_cfg)
     print(dir(voxelizer))
     print(voxelizer._max_voxels)
+    print(voxelizer.grid_size)
