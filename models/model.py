@@ -24,7 +24,11 @@ class Network(nn.Module):
         sub_model_resume_dict,
         voxel_encoder_dict,
         middle_layer_dict,
-        rpn_dict):
+        rpn_dict,
+        training_mode,
+        is_training,
+        bool_oldclass_use_newanchor_for_cls=False
+        ):
         super().__init__()
         self._model = None
         self._model_resume_dict = model_resume_dict
@@ -35,10 +39,10 @@ class Network(nn.Module):
         # _classes_source is the inference classes of _sub_model
         self._classes_source = classes_source
         # train-from-scratch, feature-extraction, fine-tuning, joint-training, lwf
-        self._training_mode = None
+        self._training_mode = training_mode
         # distillation scheme: [l2sp, delta, distillation-loss]
         self._distillation_mode = []
-        self._is_training = None
+        self._is_training = is_training
         self._hook_layers = []
         self._hook_features_model = {}
         self._hook_features_submodel = {}
@@ -48,23 +52,124 @@ class Network(nn.Module):
             "MiddleLayer": middle_layer_dict,
             "RPN": rpn_dict
         }
+        if self._training_mode in ["feature_extraction", "fine_tuning"]:
+            self._num_old_classes = self._model_resume_dict["num_classes"]
+            self._num_old_anchor_per_loc = self._model_resume_dict["num_anchor_per_loc"]
+            self._bool_oldclass_use_newanchor_for_cls = bool_oldclass_use_newanchor_for_cls
+
         self._model = Network._build_model_and_init(
             classes=self._classes_target,
             network_cfg=network_cfg,
             resume_dict=self._model_resume_dict,
             name="IncDetMain")
-        self._sub_model = self._build_model_and_init(
-            classes=self._classes_source,
-            network_cfg=network_cfg,
-            resume_dict=self._sub_model_resume_dict,
-            name="IncDetSub")
-        self._freeze_model(self._model, self._training_mode)
-        self._freeze_model(self._sub_model, self._training_mode)
-        self._register_model_hook()
-        self._register_submodel_hook()
+        if self._training_mode == "lwf":
+            self._sub_model = self._build_model_and_init(
+                classes=self._classes_source,
+                network_cfg=network_cfg,
+                resume_dict=self._sub_model_resume_dict,
+                name="IncDetSub")
+        else:
+            self._sub_model = None
+        self._freeze_model()
+        # self._register_model_hook()
+        # self._register_submodel_hook()
 
         self.register_buffer("global_step", torch.LongTensor(1).zero_())
-        raise NotImplementedError
+        # raise NotImplementedError
+
+    def _detach_variables(self, preds_dict):
+        '''
+        @training_mode
+        @preds_dict: {
+                box_preds: ...
+                cls_preds: ...
+                dir_cls_preds: ...
+            }
+        '''
+        if self._training_mode in ["train_from_scratch", "joint_training", "lwf"]:
+            return
+        elif self._training_mode in ["feature_extraction", "fine_tuning"]:
+            num_old_classes = self._num_old_classes
+            num_old_anchor_per_loc = self._num_old_anchor_per_loc
+            bool_oldclass_use_newanchor_for_cls = self._bool_oldclass_use_newanchor_for_cls
+            if bool_oldclass_use_newanchor_for_cls:
+                preds_dict["cls_preds"][:, :num_old_anchor_per_loc, ..., :num_old_classes] = \
+                    preds_dict["cls_preds"][:, :num_old_anchor_per_loc, ..., :num_old_classes].detach()
+            else:
+                preds_dict["cls_preds"][..., :num_old_classes] = \
+                    preds_dict["cls_preds"][..., :num_old_classes].detach()
+            preds_dict["box_preds"][:, :num_old_anchor_per_loc, ...] = \
+                preds_dict["box_preds"][:, :num_old_anchor_per_loc, ...].detach()
+            preds_dict["dir_cls_preds"][:, :num_old_anchor_per_loc, ...] = \
+                preds_dict["dir_cls_preds"][:, :num_old_anchor_per_loc, ...].detach()
+        else:
+            raise NotImplementedError
+
+    def _freeze_model(self):
+        '''
+        freeze model according to training_mode. (modify require_grad)
+        @ model: nn.ModuleDict {"vfe_layer", "middle_layer", "rpn"}
+        @ training_mode: str
+        "train_from_scratch",
+        "feature_extraction", "fine_tuning","joint_training", "lwf"
+        Note1: This function will not affect the behaviors of batch norms.
+        Therefore, you need to set the train() or eval() to get suitable batch norm manners.
+        Note2: To achieve the specific training mode ("finetune", "feature_extraction"),
+        this function should work with specific forward() to detach the correspondent tensors.
+        Note3: This function is specifically tailored for SECOND.
+        '''
+        training_mode = self._training_mode
+        if training_mode in ["train_from_scratch", "joint_training", "fine_tuning"]:
+            for name, param in self._model.named_parameters():
+                param.requires_grad = True
+        elif training_mode == "lwf":
+            for name, param in self._model.named_parameters():
+                param.requires_grad = True
+            for name, param in self._sub_model.named_parameters():
+                param.requires_grad = False
+        elif training_mode == "feature_extraction":
+            for name, param in self._model.named_parameters():
+                if "rpn.conv_cls" in name:
+                    param.requires_grad = True
+                elif "rpn.conv_box" in name:
+                    param.requires_grad = True
+                elif "rpn.conv_dir_cls" in name:
+                    param.requires_grad = True
+                else:
+                    param.requires_grad = False
+        else:
+            raise NotImplementedError
+
+    def _network_forward(self, model, voxels, num_points, coors, batch_size):
+        """this function is used for subclass.
+        @preds_dict: {
+                box_preds: ...
+                cls_preds: ...
+                dir_cls_preds: ...
+            }
+        """
+        voxel_features = model.vfe_layer(voxels, num_points, coors)
+        spatial_features = model.middle_layer(voxel_features, coors, batch_size)
+        preds_dict = model.rpn(spatial_features)
+        return preds_dict
+
+    def forward(self, data):
+        voxels = data["voxels"]
+        num_points = data["num_points"]
+        coors = data["coordinates"]
+        batch_anchors = data["anchors"]
+        batch_size = batch_anchors.shape[0]
+        preds_dict = self.network_forward(voxels, num_points, coors, batch_size)
+        box_preds = preds_dict["box_preds"].view(batch_size, -1, 7)
+        err_msg = f"num_anchors={batch_anchors.shape[1]}, but num_output={box_preds.shape[1]}. please check size"
+        assert batch_anchors.shape[1] == box_preds.shape[1], err_msg
+        if self.training:
+            self._detach_variables(preds_dict)
+            return self.loss(example, preds_dict)
+        else:
+            with torch.no_grad():
+                res = self.predict(example, preds_dict)
+            return res
 
     @staticmethod
     def _build_model_and_init(
@@ -80,7 +185,7 @@ class Network(nn.Module):
         }
         '''
         # build vfe layer
-        vfe_cfg = network_cfg["VoxelEncoder"]
+        vfe_cfg = network_cfg["VoxelEncoder"].copy()
         vfe_name = vfe_cfg["name"]
         if vfe_name == "SimpleVoxel":
             param = {proc_param(k): v
@@ -89,7 +194,7 @@ class Network(nn.Module):
         else:
             raise NotImplementedError
         # build middle layer
-        ml_cfg = network_cfg["MiddleLayer"]
+        ml_cfg = network_cfg["MiddleLayer"].copy()
         ml_name = ml_cfg["name"]
         if ml_name == "SpMiddleFHD":
             param = {proc_param(k): v
@@ -98,7 +203,7 @@ class Network(nn.Module):
         else:
             raise NotImplementedError
         # build rpn
-        rpn_cfg = network_cfg["RPN"]
+        rpn_cfg = network_cfg["RPN"].copy()
         rpn_name = rpn_cfg["name"]
         rpn_cfg["@num_class"] = len(classes)
         rpn_cfg["@num_anchor_per_loc"] =  len(classes) * 2 # two anchors for each class
@@ -226,9 +331,6 @@ class Network(nn.Module):
         else:
             with torch.no_grad():
                 return self.predict(data_dict, preds_dict)
-
-    def _network_forward(self, model, x):
-        return model(x)
 
     def loss(self, est, gt,
         channel_weight=None):
