@@ -4,7 +4,8 @@ from det3.dataloader.augmentor import CarlaAugmentor
 from det3.methods.second.ops.ops import rbbox2d_to_near_bbox
 from incdet3.utils import (filt_label_by_cls,
     filt_label_by_num_of_pts,
-    filt_label_by_range)
+    filt_label_by_range, bcolors)
+from det3.utils.log_tool import Logger
 
 def get_pc_from_dict(pc_dict_FIMU: dict):
     '''
@@ -130,9 +131,13 @@ def anchor_creating(target_assigner,
 def target_assigning(target_assigner,
                      label,
                      calib,
-                     anchor_res):
+                     anchor_res,
+                     classes_to_exclude=[]):
     class_names = target_assigner.classes
-    gt_dict = carlalabel2gt_dict(label, class_names, calib)
+    gt_dict = carlalabel2gt_dict(label,
+        class_names,
+        calib,
+        classes_to_exclude=classes_to_exclude)
     targets_dict = target_assigner.assign(
         anchor_res["anchors"],
         anchor_res["anchors_dict"],
@@ -145,7 +150,10 @@ def target_assigning(target_assigner,
         importance=gt_dict["gt_importance"])
     return targets_dict
 
-def carlalabel2gt_dict(carlalabel, class_names, calib_list) -> dict:
+def carlalabel2gt_dict(carlalabel,
+    class_names,
+    calib_list,
+    classes_to_exclude=[]) -> dict:
     assert carlalabel.current_frame == Frame.IMU
     if not (carlalabel.data is None or carlalabel.data == []):
         gt_boxes = carlalabel.bboxes3d
@@ -158,9 +166,14 @@ def carlalabel2gt_dict(carlalabel, class_names, calib_list) -> dict:
         gt_boxes_FIMU = np.concatenate([xyz_FIMU, wlh, ry], axis=1)
         gt_names = carlalabel.bboxes_name
         gt_classes = np.array(
-            [class_names.index(n) + 1 for n in gt_names],
+            [class_names.index(n) + 1 if n not in classes_to_exclude else -1
+            for n in gt_names],
             dtype=np.int32)
         gt_importance = np.ones([len(carlalabel.data)], dtype=gt_boxes.dtype)
+        gt_importance[gt_classes == -1] = 0
+        Logger.log_txt(bcolors.WARNING +
+            "carlalabel2gt_dict: The classes_to_exclude needs unit-test."+
+            bcolors.ENDC)
     else:
         gt_boxes_FIMU = np.array([])
         gt_classes = []
@@ -182,7 +195,8 @@ def prep_pointcloud(input_dict,
                     anchor_cache,
                     feature_map_size,
                     target_assigner,
-                    db_sampler=None,):
+                    db_sampler=None,
+                    classes_to_exclude=[]):
     '''
     input_dict:
         {
@@ -242,7 +256,8 @@ def prep_pointcloud(input_dict,
         target_assigner=target_assigner,
         label=label,
         calib=calib,
-        anchor_res=anchor_res)
+        anchor_res=anchor_res,
+        classes_to_exclude=classes_to_exclude)
     example.update({
         'labels': targets_dict['labels'],
         'reg_targets': targets_dict['bbox_targets'],

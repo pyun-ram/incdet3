@@ -985,5 +985,85 @@ class Test_freeze_model_and_detach_variables(unittest.TestCase):
 
                 self.assertFalse(check_grad_not_have_zero(network._model.rpn.deblocks[0][0].weight))
 
+class Test_register_hook(unittest.TestCase):
+    network_cfg_template =  {
+        "VoxelEncoder": {
+            "name": "SimpleVoxel",
+            "@num_input_features": 3,
+        },
+        "MiddleLayer":{
+            "name": "SpMiddleFHD",
+            "@use_norm": True,
+            "@num_input_features": 3,
+            "@output_shape": [1, 41, 1600, 1408, 16], #TBD
+            "downsample_factor": 8
+        },
+        "RPN":{
+            "name": "ResNetRPN",
+            "@use_norm": True,
+            "@num_class": None, # TBD
+            "@layer_nums": [5],
+            "@layer_strides": [1],
+            "@num_filters": [128],
+            "@upsample_strides": [1],
+            "@num_upsample_filters": [128],
+            "@num_input_features": 128,
+            "@num_anchor_per_loc": None, # TBD
+            "@encode_background_as_zeros": True,
+            "@use_direction_classifier": True,
+            "@use_groupnorm": False,
+            "@num_groups": 0,
+            "@box_code_size": 7, # TBD
+            "@num_direction_bins": 2,
+        },
+    }
+    name_template = "IncDetTest"
+    def test_register_model_hook(self):
+        for rpn_name in ["RPNV2", "ResNetRPN"]:
+            network_cfg = Test_register_hook.network_cfg_template.copy()
+            network_cfg["RPN"]["name"] = rpn_name
+            network_cfg["RPN"]["@num_class"] = 2
+            network_cfg["RPN"]["@num_anchor_per_loc"] = 4
+            params = {
+                "classes_target": ["class1", "class2"],
+                "classes_source": ["class1"],
+                "model_resume_dict": None,
+                "sub_model_resume_dict": None,
+                "voxel_encoder_dict": network_cfg["VoxelEncoder"],
+                "middle_layer_dict": network_cfg["MiddleLayer"],
+                "rpn_dict": network_cfg["RPN"],
+                "training_mode": "lwf",
+                "hook_layers": ["rpn.blocks.0.4.conv2", "middle_layer.middle_conv.41"],
+                "is_training": True,
+                "bool_oldclass_use_newanchor_for_cls": False,
+            }
+            network = Network(**params).cuda()
+            data = load_pickle("./unit_tests/data/test_build_model_and_init_data.pkl")
+            voxels = data["voxels"]
+            num_points = data["num_points"]
+            coors = data["coordinates"]
+            batch_size = data["anchors"].shape[0]
+
+            preds_dict = network._network_forward(network._model,
+                voxels,
+                num_points,
+                coors,
+                batch_size)
+            preds_dict_sub = network._network_forward(network._sub_model,
+                voxels,
+                num_points,
+                coors,
+                batch_size)
+            if rpn_name == "ResNetRPN":
+                self.assertTrue(list(network._hook_features_model[0].shape) == [17860, 64])
+                self.assertTrue(list(network._hook_features_model[1].shape) == [1, 128, 200, 176])
+                self.assertTrue(list(network._hook_features_submodel[0].shape) == [17860, 64])
+                self.assertTrue(list(network._hook_features_submodel[1].shape) == [1, 128, 200, 176])
+            elif rpn_name == "RPNV2":
+                self.assertTrue(list(network._hook_features_model[0].shape) == [17860, 64])
+                self.assertTrue(list(network._hook_features_submodel[0].shape) == [17860, 64])
+            else:
+                raise NotImplementedError
+
 if __name__ == "__main__":
     unittest.main()

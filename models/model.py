@@ -13,10 +13,13 @@ from det3.utils.utils import is_param, proc_param
 from det3.methods.second.models.voxel_encoder import get_vfe_class
 from det3.methods.second.models.middle import get_middle_class
 from det3.methods.second.core.model_manager import save_models
+from det3.methods.second.models.losses import get_loss_class
+from det3.methods.second.core.second import add_sin_difference, get_direction_target
 from incdet3.models.rpn import get_rpn_class
 from incdet3.utils.utils import bcolors
 
 class Network(nn.Module):
+    HEAD_NEAMES = ["rpn.conv_cls", "rpn.conv_box", "rpn.conv_dir_cls"]
     def __init__(self,
         classes_target,
         classes_source,
@@ -27,7 +30,18 @@ class Network(nn.Module):
         rpn_dict,
         training_mode,
         is_training,
-        bool_oldclass_use_newanchor_for_cls=False
+        sin_error_factor=1.0,
+        pos_cls_weight=1.0,
+        neg_cls_weight=1.0,
+        l2sp_coef=1.0,
+        delta_coef=1.0,
+        distillation_loss_cls_coef=1.0,
+        distillation_loss_reg_coef=1.0,
+        num_biased_select=64,
+        loss_dict={},
+        hook_layers=[],
+        distillation_mode=[],
+        bool_oldclass_use_newanchor_for_cls=False,
         ):
         super().__init__()
         self._model = None
@@ -41,17 +55,46 @@ class Network(nn.Module):
         # train-from-scratch, feature-extraction, fine-tuning, joint-training, lwf
         self._training_mode = training_mode
         # distillation scheme: [l2sp, delta, distillation-loss]
-        self._distillation_mode = []
+        self._distillation_mode = distillation_mode
         self._is_training = is_training
-        self._hook_layers = []
-        self._hook_features_model = {}
-        self._hook_features_submodel = {}
+        self._hook_layers = hook_layers
+        self._hook_features_model = []
+        self._hook_features_submodel = []
+        self.register_buffer("global_step", torch.LongTensor(1).zero_())
+
+        self._pos_cls_weight = pos_cls_weight
+        self._neg_cls_weight = neg_cls_weight
+        self._loss_norm_type = "NormByNumPositives"
+        self._l2sp_coef = l2sp_coef
+        self._delta_coef = delta_coef
+        self._distillation_loss_cls_coef = distillation_loss_cls_coef
+        self._distillation_loss_reg_coef = distillation_loss_reg_coef
+        self._num_biased_select = num_biased_select
 
         network_cfg = {
             "VoxelEncoder": voxel_encoder_dict,
             "MiddleLayer": middle_layer_dict,
-            "RPN": rpn_dict
+            "RPN": rpn_dict,
         }
+        if len(loss_dict) != 0:
+            param = {proc_param(k):v
+                for k, v in loss_dict["ClassificationLoss"].items() if is_param(k)}
+            self._cls_loss_ftor = get_loss_class(loss_dict["ClassificationLoss"]["name"])(**param)
+            param = {proc_param(k):v
+                for k, v in loss_dict["LocalizationLoss"].items() if is_param(k)}
+            self._loc_loss_ftor = get_loss_class(loss_dict["LocalizationLoss"]["name"])(**param)
+            self._sin_error_factor = sin_error_factor
+            param = {proc_param(k):v
+                for k, v in loss_dict["DirectionLoss"].items() if is_param(k)}
+            self._dir_cls_loss_ftor = get_loss_class(loss_dict["DirectionLoss"]["name"])(**param)
+            if "distillation_loss" in self._distillation_mode:
+                param = {proc_param(k):v
+                    for k, v in loss_dict["DistillationClassificationLoss"].items() if is_param(k)}
+                self._distillation_loss_cls_ftor = get_loss_class(loss_dict["DistillationClassificationLoss"]["name"])(**param)
+                param = {proc_param(k):v
+                    for k, v in loss_dict["DistillationRegressionLoss"].items() if is_param(k)}
+                self._distillation_loss_reg_ftor = get_loss_class(loss_dict["DistillationRegressionLoss"]["name"])(**param)
+
         if self._training_mode in ["feature_extraction", "fine_tuning"]:
             self._num_old_classes = self._model_resume_dict["num_classes"]
             self._num_old_anchor_per_loc = self._model_resume_dict["num_anchor_per_loc"]
@@ -68,14 +111,37 @@ class Network(nn.Module):
                 network_cfg=network_cfg,
                 resume_dict=self._sub_model_resume_dict,
                 name="IncDetSub")
+            self._register_model_hook()
+            self._register_submodel_hook()
         else:
             self._sub_model = None
         self._freeze_model()
-        # self._register_model_hook()
-        # self._register_submodel_hook()
 
-        self.register_buffer("global_step", torch.LongTensor(1).zero_())
-        # raise NotImplementedError
+    def get_global_step(self):
+        return int(self.global_step.cpu().numpy()[0])
+
+    def update_global_step(self):
+        self.global_step += 1
+
+    def _register_model_hook(self):
+        def _model_hook_func(module, input, output):
+            '''
+            hook function for model
+            '''
+            self._hook_features_model.append(output)
+        for name, layer in self._model.named_modules():
+            if name in self._hook_layers:
+                layer.register_forward_hook(_model_hook_func)
+
+    def _register_submodel_hook(self):
+        def _submodel_hook_func(module, input, output):
+            '''
+            hook function for sub_model
+            '''
+            self._hook_features_submodel.append(output)
+        for name, layer in self._sub_model.named_modules():
+            if name in self._hook_layers:
+                layer.register_forward_hook(_submodel_hook_func)
 
     def _detach_variables(self, preds_dict):
         '''
@@ -324,56 +390,268 @@ class Network(nn.Module):
             itr, max_to_keep=float('inf'))
         Logger.log_txt("Saving parameters to {}".format(save_dir))
 
-    def forward(self, data_dict):
-        preds_dict = self._network_forward(self._model, data_dict)
-        if self.training:
-            return self.loss(data_dict, preds_dict)
-        else:
-            with torch.no_grad():
-                return self.predict(data_dict, preds_dict)
-
-    def loss(self, est, gt,
+    def loss(self,
+        example,
+        preds_dict,
         channel_weight=None):
+        box_preds = preds_dict["box_preds"]
+        cls_preds = preds_dict["cls_preds"]
+        batch_size_dev = cls_preds.shape[0]
+        labels = example['labels']
+        reg_targets = example['reg_targets']
+        importance = example['importance']
         loss_dict = dict()
-        loss_dict["loss_cls"] = self._compute_classification_loss(est, gt)
-        loss_dict["loss_reg"] = self._compute_regression_loss(est, gt)
+
+        weights = Network._prepare_loss_weights(
+            labels,
+            pos_cls_weight=self._pos_cls_weight,
+            neg_cls_weight=self._neg_cls_weight,
+            loss_norm_type=self._loss_norm_type,
+            dtype=box_preds.dtype)
+        cls_targets = labels * weights["cared"].type_as(labels)
+        cls_targets = cls_targets.unsqueeze(-1)
+        loss_dict["loss_cls"] = self._compute_classification_loss(
+            est=cls_preds,
+            gt=cls_targets,
+            weights=weights["cls_weights"])
+        loss_dict["loss_reg"] = self._compute_location_loss(
+            est=box_preds,
+            gt=reg_targets,
+            weights=weights["reg_weights"])
+        if self._use_direction_classifier:
+            dir_targets = get_direction_target(
+                example["anchors"],
+                reg_targets,
+                dir_offset=0,
+                num_bins=2)
+            dir_logits = preds_dict["dir_cls_preds"].view(
+                batch_size_dev, -1, 2)
+            loss_dict["loss_dir_cls"] = self._compute_direction_loss(
+                est=dir_logits,
+                gt=dir_targets,
+                weights=weights["dir_weights"])
         if "l2sp" in self._distillation_mode:
             # call model weights in the _compute_l2sp_loss()
             loss_dict["loss_l2sp"] = self._compute_l2sp_loss()
         if "delta" in self._distillation_mode:
             # call hook features in the _compute_l2sp_loss()
+            preds_dict_sub = self._network_forward(self._sub_model,
+                example["voxels"],
+                example["num_points"],
+                example["coordinates"],
+                example["anchors"].shape[0])
             loss_dict["loss_delta"] = self._compute_delta_loss(channel_weight)
-        if "distillation-loss" in self._distillation_mode:
+            self._hook_features_model.clear()
+            self._hook_features_submodel.clear()
+        if "distillation_loss" in self._distillation_mode:
             # call hook features in the _compute_l2sp_loss()
-            loss_dict["loss_distillation-loss"] = self._compute_distillation_loss()
+            if "delta" not in self._distillation_mode:
+                preds_dict_sub = self._network_forward(self._sub_model,
+                    example["voxels"],
+                    example["num_points"],
+                    example["coordinates"],
+                    example["anchors"].shape[0])
+            loss_dict["loss_distillation_loss"] = self._compute_distillation_loss(
+                preds_dict, preds_dict_sub)
         loss_dict["loss_total"] = sum(loss_dict.values())
-        self._hook_features_model.clear()
-        self._hook_features_submodel.clear()
         return loss_dict
+
+    @staticmethod
+    def _prepare_loss_weights(labels,
+        pos_cls_weight,
+        neg_cls_weight,
+        loss_norm_type,
+        importance,
+        use_direction_classifier,
+        dtype=torch.float32):
+        '''
+        prepare weights for each anchor according to pos_cls_weight, neg_cls_weight, loss_norm_type
+        @pos_cls_weight: float
+        @neg_cls_weight: float
+        @loss_norm_type: str "NormByNumPositives"
+        @importance: [batch_size, #anchor] torch.FloatTensor (all 1.0)
+        -> weights = {
+            "cls_weights", weights for classification
+            "reg_weights", weights for bbox regression
+            "dir_weights", weights for dir classification
+            "cares", labels >= 0
+        }
+        '''
+        cared = labels >= 0
+        # cared: [N, num_anchors]
+        positives = labels > 0
+        negatives = labels == 0
+        negative_cls_weights = negatives.type(dtype) * neg_cls_weight
+        cls_weights = negative_cls_weights + pos_cls_weight * positives.type(dtype)
+        reg_weights = positives.type(dtype)
+        cls_weights *= importance
+        reg_weights *= importance
+        if loss_norm_type == "NormByNumPositives":  # for focal loss
+            pos_normalizer = positives.sum(1, keepdim=True).type(dtype)
+            reg_weights /= torch.clamp(pos_normalizer, min=1.0)
+            cls_weights /= torch.clamp(pos_normalizer, min=1.0)
+        else:
+            raise NotImplementedError
+        if use_direction_classifier:
+            dir_weights = positives.type(dtype) * importance
+            dir_normalizer = dir_weights.sum(-1, keepdim=True)
+            dir_weights /= torch.clamp(dir_normalizer, min=1.0)
+        weights = {
+            "cls_weights": cls_weights,
+            "reg_weights": reg_weights,
+            "dir_weights": dir_weights,
+            "cared": cared
+        }
+        return weights
+
+    def _compute_classification_loss(
+            self,
+            est,
+            gt,
+            weights):
+        '''
+        @est: [batch_size, num_anchors, H, W, num_classes] logits
+        @gt: [batch_size, num_anchors, H, W, 1] int32
+        @weights: [batch_size, num_anchors]
+        '''
+        batch_size = int(est.shape[0])
+        num_class = len(self._classes_target)
+        est_cls = est.view(batch_size, -1, num_class)
+        gt_cls = gt.squeeze(-1).long()
+        one_hot_targets = nn.functional.one_hot(gt_cls, num_classes=num_class+1).float()
+        one_hot_targets = one_hot_targets[..., 1:]
+        return self._cls_loss_ftor(est_cls, one_hot_targets, weights=weights)
+
+    def _compute_location_loss(self,
+        est,
+        gt,
+        weights):
+        '''
+        @est: [batch_size, num_anchor, H, W, 7]
+        @gt: [batch_size, num_anchor, H, W, 7]
+        '''
+        batch_size = int(est.shape[0])
+        est_box = est.view(batch_size, -1, 7)
+        gt_box = gt
+        est_box, gt_box = add_sin_difference(
+            est_box, gt_box,
+            est_box[..., 6:7], gt_box[..., 6:7],
+            self._sin_error_factor)
+        return self._loc_loss_ftor(est_box, gt_box, weights=weights)
+
+    def _compute_direction_loss(self,
+        est,
+        gt,
+        weights):
+        return self._dir_cls_loss_ftor(est, gt, weights=weights)
+
+    def _compute_l2sp_loss(self):
+        loss = 0
+        sub_model_weights = self._sub_model.state_dict()
+        for name, param in self._model.named_parameters():
+            is_head = any([name.startswith(headname) for headname in Network.HEAD_NEAMES])
+            if not is_head:
+                loss += 0.5 * torch.norm(param - sub_model_weights[name].detach()) ** 2
+        return self._l2sp_coef * loss
+
+    def _compute_delta_loss(self,
+        channel_weights):
+        def flatten_outputs(fea):
+            return torch.reshape(fea, (fea.shape[0], fea.shape[1], fea.shape[2] * fea.shape[3]))
+        fea_loss = 0
+        if channel_weights is None:
+            for fm_src, fm_tgt in zip(self._hook_features_model, self._hook_features_submodel):
+                b, c, h, w = fm_src.shape
+                fea_loss += 0.5 * (torch.norm(fm_tgt - fm_src.detach()) ** 2)
+        else:
+            for i, (fm_src, fm_tgt) in enumerate(zip(self._hook_features_model, self._hook_features_submodel)):
+                b, c, h, w = fm_src.shape
+                fm_src = flatten_outputs(fm_src)
+                fm_tgt = flatten_outputs(fm_tgt)
+                div_norm = h * w
+                distance = torch.norm(fm_tgt - fm_src.detach(), 2, 2)
+                distance = c * torch.mul(channel_weights[i], distance ** 2) / (h * w)
+                fea_loss += 0.5 * torch.sum(distance)
+            Logger.log_txt(bcolors.WARNING +
+                "Network._compute_delta_loss() with channel_weights needs unit-test." +
+                bcolors.ENDC)
+        return self._delta_coef * fea_loss
+
+    def _compute_distillation_loss(self, preds_dict, preds_dict_sub):
+        def _compute_weights(cls_preds, num_select=64):
+            '''
+            @cls_preds: [batch_size, num_anchor, H, W, num_classes] logits
+            -> weights [batch_size, num_anchor]
+            '''
+            batch_size = cls_preds.shape[0]
+            num_new_classes = cls_preds.shape[-1]
+            fg_score = cls_preds.view(batch_size, -1, num_new_classes)
+            num_anchor = fg_score.shape[1]
+            weights = torch.zeros(batch_size, num_anchor,
+                dtype=cls_preds.dtype,
+                device=torch.device("cuda:0"))
+            for i in range(batch_size):
+                fg_score, _ = torch.max(fg_score[i, ...], dim=-1)
+                tmp, indices = torch.topk(fg_score, num_select)
+                weights[i, indices] = 1
+            return weights
+
+        batch_size = preds_dict["cls_preds"].shape[0]
+        num_new_classes = len(self._classes_target)
+        num_new_anchor_per_loc = num_new_classes * 2
+        num_old_classes = len(self._classes_source)
+        num_old_anchor_per_loc = num_old_classes * 2
+        cls_output = (preds_dict["cls_preds"]
+            [:, :num_old_anchor_per_loc, ..., :num_old_classes]
+            .reshape(batch_size, -1, num_old_classes))
+        cls_target = (preds_dict_sub["cls_preds"].detach()
+            .reshape(batch_size, -1, num_old_classes))
+        weights = _compute_weights(
+            cls_output,
+            num_select=self._num_biased_select)
+        batch_size = preds_dict["cls_preds"].shape[0]
+        Logger.log_txt(bcolors.WARNING +
+            "Network._compute_distillation_loss() num_select needs to tune." +
+            bcolors.ENDC)
+        cls_loss = self._distillation_loss_cls_ftor(
+            cls_output,
+            cls_target,
+            weights=weights)
+        reg_output = (preds_dict["box_preds"]
+            [:, :num_old_anchor_per_loc, ...]
+            .reshape(batch_size, -1, 7))
+        reg_target = (preds_dict_sub["box_preds"].detach()
+            .reshape(batch_size, -1, 7))
+        reg_loss = self._distillation_loss_reg_ftor(
+            reg_output,
+            reg_target,
+            weights=weights)
+        return {
+            "loss_distillation_loss_cls": self._distillation_loss_cls_coef * cls_loss,
+            "loss_distillation_loss_reg": self._distillation_loss_reg_coef * reg_loss,
+        }
 
     def predict():
         raise NotImplementedError
 
     def train(self):
+        assert False, "Network.train() needs unit-test!"
         if self._training_mode == "train-from-scratch":
             self._model.train()
             assert self._sub_model is None
         elif self._training_mode in ["feature-extraction", "joint-training", "lwf"]:
             # freeze bn and no dropout
             self._model.eval()
-            self._sub_model.eval()
+            if self._sub_model is not None:
+                self._sub_model.eval()
         else:
             raise NotImplementedError
     
     def eval(self):
+        assert False, "Network.eval() needs unit-test!"
         self._model.eval()
-        self._sub_model.eval()
-
-    def get_global_step(self):
-        return int(self.global_step.cpu().numpy()[0])
-
-    def update_global_step(self):
-        self.global_step += 1
+        if self._sub_model is not None:
+            self._sub_model.eval()
 
 if __name__ == "__main__":
     from incdet3.data.carladataset import CarlaDataset

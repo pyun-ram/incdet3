@@ -17,7 +17,6 @@ class CarlaDataset:
         self._root_path = root_path
         self._class_names = class_names
         # TODO: Do we need the _classes_to_exclude?
-        self._classes_to_exclude = []
         self._prep_func = prep_func
 
     def __len__(self):

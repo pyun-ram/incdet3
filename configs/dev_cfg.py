@@ -34,7 +34,7 @@ cfg.VOXELIZER = {
 
 cfg.TARGETASSIGNER = {
     "type": "TaskAssignerV1",
-    "@classes": ["Car"],
+    "@classes": ["Car", "Pedestrian"],
     # "@classes": ["Car", "Pedestrian", "Pedestrian2"],
     "@feature_map_sizes": None,
     "@positive_fraction": None,
@@ -58,20 +58,20 @@ cfg.TARGETASSIGNER = {
             "type": "NearestIoUSimilarity"
         }
     },
-    # "class_settings_pedestrian": {
-    #     "AnchorGenerator": {
-    #         "type": "AnchorGeneratorBEV",
-    #         "@class_name": "Pedestrian",
-    #         "@anchor_ranges": cfg.TASK["valid_range"].copy(), # TBD in modify_cfg(cfg)
-    #         "@sizes": [0.6, 0.8, 1.73], # wlh
-    #         "@rotations": [0, 1.57],
-    #         "@match_threshold": 0.6,
-    #         "@unmatch_threshold": 0.45,
-    #     },
-    #     "SimilarityCalculator": {
-    #         "type": "NearestIoUSimilarity"
-    #     }
-    # },
+    "class_settings_pedestrian": {
+        "AnchorGenerator": {
+            "type": "AnchorGeneratorBEV",
+            "@class_name": "Pedestrian",
+            "@anchor_ranges": cfg.TASK["valid_range"].copy(), # TBD in modify_cfg(cfg)
+            "@sizes": [0.6, 0.8, 1.73], # wlh
+            "@rotations": [0, 1.57],
+            "@match_threshold": 0.6,
+            "@unmatch_threshold": 0.45,
+        },
+        "SimilarityCalculator": {
+            "type": "NearestIoUSimilarity"
+        }
+    },
     # "class_settings_pedestrian2": {
     #     "AnchorGenerator": {
     #         "type": "AnchorGeneratorBEV",
@@ -184,6 +184,34 @@ cfg.NETWORK = {
         "@box_code_size": None, # TBD
         "@num_direction_bins": 2,
     },
+    "@loss_dict": {
+        "ClassificationLoss":{
+            "name": "SigmoidFocalClassificationLoss",
+            "@alpha": 0.25,
+            "@gamma": 2.0,
+        },
+        "LocalizationLoss":{
+            "name": "WeightedSmoothL1LocalizationLoss",
+            "@sigma": 3.0,
+            "@code_weights": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+            "@codewise": True,
+        },
+        "DirectionLoss":{
+            "name": "WeightedSoftmaxClassificationLoss",
+        },
+        "DistillationClassificationLoss":{
+            "name": "WeightedSmoothL1LocalizationLoss",
+            "@sigma": 1.0,
+            "@code_weights": None, # TBD
+            "@codewise": True,
+        },
+        "DistillationRegressionLoss":{
+            "name": "WeightedSmoothL1LocalizationLoss",
+            "@sigma": 1.0,
+            "@code_weights": [1.0] * 7,
+            "@codewise": True,
+        },
+    }
 }
 def modify_cfg(cfg):
     # modify anchor ranges
@@ -192,3 +220,7 @@ def modify_cfg(cfg):
             cfg.TARGETASSIGNER[k]["AnchorGenerator"]["@anchor_ranges"] = cfg.TASK["valid_range"].copy()
             cfg.TARGETASSIGNER[k]["AnchorGenerator"]["@anchor_ranges"][2] = 0.0
             cfg.TARGETASSIGNER[k]["AnchorGenerator"]["@anchor_ranges"][-1] = 0.0
+    # modify num_old_classes for distillation_loss
+    if cfg.NETWORK["@loss_dict"].has_key("DistillationClassificationLoss"):
+        num_old_classes = len(cfg.NETWORK["@classes_source"])
+        cfg.NETWORK["@loss_dict"]["DistillationClassificationLoss"]["code_weights"] = [1.0] * num_old_classes
