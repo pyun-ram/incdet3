@@ -10,6 +10,7 @@ import torch.nn as nn
 import numpy as np
 from incdet3.models.model import Network
 from det3.utils.utils import load_pickle
+from incdet3.utils.utils import bcolors
 
 class Test_build_model_and_init(unittest.TestCase):
     '''
@@ -64,6 +65,7 @@ class Test_build_model_and_init(unittest.TestCase):
         '''
         single class, rpnv2&resnet, no resume
         '''
+        torch.cuda.empty_cache()
         for rpn_name in ["RPNV2", "ResNetRPN"]:
             network_cfg = Test_build_model_and_init.network_cfg_template.copy()
             network_cfg["RPN"]["name"] = rpn_name

@@ -34,8 +34,8 @@ cfg.VOXELIZER = {
 
 cfg.TARGETASSIGNER = {
     "type": "TaskAssignerV1",
-    "@classes": ["Car", "Pedestrian"],
-    # "@classes": ["Car", "Pedestrian", "Pedestrian2"],
+    # "@classes": ["Car", "Pedestrian"],
+    "@classes": ["Car", "Pedestrian", "Pedestrian2"],
     "@feature_map_sizes": None,
     "@positive_fraction": None,
     "@sample_size": 512,
@@ -72,20 +72,20 @@ cfg.TARGETASSIGNER = {
             "type": "NearestIoUSimilarity"
         }
     },
-    # "class_settings_pedestrian2": {
-    #     "AnchorGenerator": {
-    #         "type": "AnchorGeneratorBEV",
-    #         "@class_name": "Pedestrian2",
-    #         "@anchor_ranges": cfg.TASK["valid_range"].copy(), # TBD in modify_cfg(cfg)
-    #         "@sizes": [0.61, 0.81, 1.731], # wlh
-    #         "@rotations": [0, 1.57],
-    #         "@match_threshold": 0.6,
-    #         "@unmatch_threshold": 0.45,
-    #     },
-    #     "SimilarityCalculator": {
-    #         "type": "NearestIoUSimilarity"
-    #     }
-    # },
+    "class_settings_pedestrian2": {
+        "AnchorGenerator": {
+            "type": "AnchorGeneratorBEV",
+            "@class_name": "Pedestrian2",
+            "@anchor_ranges": cfg.TASK["valid_range"].copy(), # TBD in modify_cfg(cfg)
+            "@sizes": [0.61, 0.81, 1.731], # wlh
+            "@rotations": [0, 1.57],
+            "@match_threshold": 0.6,
+            "@unmatch_threshold": 0.45,
+        },
+        "SimilarityCalculator": {
+            "type": "NearestIoUSimilarity"
+        }
+    },
 }
 
 cfg.TRAINDATA = {

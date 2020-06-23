@@ -33,7 +33,8 @@ class Network(nn.Module):
         sin_error_factor=1.0,
         pos_cls_weight=1.0,
         neg_cls_weight=1.0,
-        l2sp_coef=1.0,
+        l2sp_alpha_coef=1.0,
+        l2sp_beta_coef=1.0,
         delta_coef=1.0,
         distillation_loss_cls_coef=1.0,
         distillation_loss_reg_coef=1.0,
@@ -42,6 +43,7 @@ class Network(nn.Module):
         hook_layers=[],
         distillation_mode=[],
         bool_oldclass_use_newanchor_for_cls=False,
+        bool_biased_select_with_submodel=False,
         ):
         super().__init__()
         self._model = None
@@ -65,11 +67,13 @@ class Network(nn.Module):
         self._pos_cls_weight = pos_cls_weight
         self._neg_cls_weight = neg_cls_weight
         self._loss_norm_type = "NormByNumPositives"
-        self._l2sp_coef = l2sp_coef
+        self._l2sp_alpha_coef = l2sp_alpha_coef
+        self._l2sp_beta_coef = l2sp_beta_coef
         self._delta_coef = delta_coef
         self._distillation_loss_cls_coef = distillation_loss_cls_coef
         self._distillation_loss_reg_coef = distillation_loss_reg_coef
         self._num_biased_select = num_biased_select
+        self._bool_biased_select_with_submodel = bool_biased_select_with_submodel
 
         network_cfg = {
             "VoxelEncoder": voxel_encoder_dict,
@@ -99,6 +103,12 @@ class Network(nn.Module):
             self._num_old_classes = self._model_resume_dict["num_classes"]
             self._num_old_anchor_per_loc = self._model_resume_dict["num_anchor_per_loc"]
             self._bool_oldclass_use_newanchor_for_cls = bool_oldclass_use_newanchor_for_cls
+
+        if "l2sp" in self._distillation_mode or "distillation_loss" in self._distillation_mode:
+            self._num_old_classes = self._sub_model_resume_dict["num_classes"]
+            self._num_old_anchor_per_loc = self._sub_model_resume_dict["num_anchor_per_loc"]
+            self._num_new_classes = len(self._classes_target)
+            self._num_new_anchor_per_loc = 2 * self._num_new_classes
 
         self._model = Network._build_model_and_init(
             classes=self._classes_target,
@@ -451,8 +461,10 @@ class Network(nn.Module):
                     example["num_points"],
                     example["coordinates"],
                     example["anchors"].shape[0])
-            loss_dict["loss_distillation_loss"] = self._compute_distillation_loss(
+            loss_dl = self._compute_distillation_loss(
                 preds_dict, preds_dict_sub)
+            loss_dict["loss_distillation_loss_cls"] = loss_dl["loss_distillation_loss_cls"]
+            loss_dict["loss_distillation_loss_reg"] = loss_dl["loss_distillation_loss_reg"]
         loss_dict["loss_total"] = sum(loss_dict.values())
         return loss_dict
 
@@ -510,9 +522,9 @@ class Network(nn.Module):
             gt,
             weights):
         '''
-        @est: [batch_size, num_anchors, H, W, num_classes] logits
-        @gt: [batch_size, num_anchors, H, W, 1] int32
-        @weights: [batch_size, num_anchors]
+        @est: [batch_size, num_anchors_per_loc, H, W, num_classes] logits
+        @gt: [batch_size, num_anchors, 1] int32
+        @weights: [batch_size, num_anchors] float32
         '''
         batch_size = int(est.shape[0])
         num_class = len(self._classes_target)
@@ -527,8 +539,9 @@ class Network(nn.Module):
         gt,
         weights):
         '''
-        @est: [batch_size, num_anchor, H, W, 7]
-        @gt: [batch_size, num_anchor, H, W, 7]
+        @est: [batch_size, num_anchors_per_loc, H, W, 7] float32
+        @gt: [batch_size, num_anchors, 7] float32
+        @weights: [batch_size, num_anchors] float32
         '''
         batch_size = int(est.shape[0])
         est_box = est.view(batch_size, -1, 7)
@@ -543,16 +556,56 @@ class Network(nn.Module):
         est,
         gt,
         weights):
-        return self._dir_cls_loss_ftor(est, gt, weights=weights)
+        '''
+        @est: [batch_size, num_anchors_per_loc, H, W, 2] logits
+        @gt: [batch_size, num_anchors, 1] int32
+        @weights: [batch_size, num_anchors] float32
+        '''
+        batch_size = int(est.shape[0])
+        est_dir = est.view(batch_size, -1, 2)
+        return self._dir_cls_loss_ftor(est_dir, gt, weights=weights)
 
     def _compute_l2sp_loss(self):
-        loss = 0
+        loss_alpha = 0
+        loss_beta = 0
         sub_model_weights = self._sub_model.state_dict()
         for name, param in self._model.named_parameters():
             is_head = any([name.startswith(headname) for headname in Network.HEAD_NEAMES])
             if not is_head:
-                loss += 0.5 * torch.norm(param - sub_model_weights[name].detach()) ** 2
-        return self._l2sp_coef * loss
+                loss_alpha += 0.5 * torch.norm(param - sub_model_weights[name].detach()) ** 2
+            else:
+                compute_param_shape = param.shape
+                if name.startswith("rpn.conv_cls"):
+                    compute_param = param.reshape(self._num_new_anchor_per_loc,
+                        self._num_new_classes, *compute_param_shape[1:])
+                    compute_oldparam = compute_param[:self._num_old_anchor_per_loc,
+                        :self._num_old_classes, ...].reshape(-1, *compute_param_shape[1:]).contiguous()
+                    # new classes
+                    compute_newparam = compute_param[:,
+                        self._num_old_classes:, ...].reshape(-1, *compute_param_shape[1:]).contiguous()
+                    # old classes with new anchors
+                    compute_newparam_ = compute_param[self._num_old_anchor_per_loc:,
+                        :self._num_old_classes, ...].reshape(-1, *compute_param_shape[1:]).contiguous()
+                    compute_newparam = torch.cat([compute_newparam, compute_newparam_], dim=0)
+                elif name.startswith("rpn.conv_box"):
+                    compute_param = param.reshape(self._num_new_anchor_per_loc,
+                        7, *compute_param_shape[1:])
+                    compute_oldparam = compute_param[:self._num_old_anchor_per_loc,
+                        ...].reshape(-1, *compute_param_shape[1:]).contiguous()
+                    compute_newparam = compute_param[self._num_old_anchor_per_loc:,
+                        ...].reshape(-1, *compute_param_shape[1:]).contiguous()
+                elif name.startswith("rpn.conv_dir_cls"):
+                    compute_param = param.reshape(self._num_new_anchor_per_loc,
+                        2, *compute_param_shape[1:])
+                    compute_oldparam = compute_param[:self._num_old_anchor_per_loc,
+                        ...].reshape(-1, *compute_param_shape[1:]).contiguous()
+                    compute_newparam = compute_param[self._num_old_anchor_per_loc:,
+                        ...].reshape(-1, *compute_param_shape[1:]).contiguous()
+                else:
+                    raise NotImplementedError
+                loss_alpha += 0.5 * torch.norm(compute_oldparam - sub_model_weights[name].detach()) ** 2
+                loss_beta += 0.5 * torch.norm(compute_newparam) ** 2
+        return self._l2sp_alpha_coef * loss_alpha + self._l2sp_beta_coef * loss_beta
 
     def _compute_delta_loss(self,
         channel_weights):
@@ -560,16 +613,16 @@ class Network(nn.Module):
             return torch.reshape(fea, (fea.shape[0], fea.shape[1], fea.shape[2] * fea.shape[3]))
         fea_loss = 0
         if channel_weights is None:
-            for fm_src, fm_tgt in zip(self._hook_features_model, self._hook_features_submodel):
-                b, c, h, w = fm_src.shape
-                fea_loss += 0.5 * (torch.norm(fm_tgt - fm_src.detach()) ** 2)
+            for fm_model, fm_submodel in zip(self._hook_features_model, self._hook_features_submodel):
+                b, c, h, w = fm_model.shape
+                fea_loss += 0.5 * (torch.norm(fm_model - fm_submodel.detach()) ** 2)
         else:
-            for i, (fm_src, fm_tgt) in enumerate(zip(self._hook_features_model, self._hook_features_submodel)):
-                b, c, h, w = fm_src.shape
-                fm_src = flatten_outputs(fm_src)
-                fm_tgt = flatten_outputs(fm_tgt)
+            for i, (fm_model, fm_submodel) in enumerate(zip(self._hook_features_model, self._hook_features_submodel)):
+                b, c, h, w = fm_model.shape
+                fm_model = flatten_outputs(fm_model)
+                fm_submodel = flatten_outputs(fm_submodel)
                 div_norm = h * w
-                distance = torch.norm(fm_tgt - fm_src.detach(), 2, 2)
+                distance = torch.norm(fm_model - fm_submodel.detach(), 2, 2)
                 distance = c * torch.mul(channel_weights[i], distance ** 2) / (h * w)
                 fea_loss += 0.5 * torch.sum(distance)
             Logger.log_txt(bcolors.WARNING +
@@ -597,36 +650,36 @@ class Network(nn.Module):
             return weights
 
         batch_size = preds_dict["cls_preds"].shape[0]
-        num_new_classes = len(self._classes_target)
-        num_new_anchor_per_loc = num_new_classes * 2
-        num_old_classes = len(self._classes_source)
-        num_old_anchor_per_loc = num_old_classes * 2
+        num_new_classes = self._num_new_classes
+        num_new_anchor_per_loc = self._num_new_anchor_per_loc
+        num_old_classes = self._num_old_classes
+        num_old_anchor_per_loc = self._num_old_anchor_per_loc
         cls_output = (preds_dict["cls_preds"]
             [:, :num_old_anchor_per_loc, ..., :num_old_classes]
             .reshape(batch_size, -1, num_old_classes))
         cls_target = (preds_dict_sub["cls_preds"].detach()
             .reshape(batch_size, -1, num_old_classes))
-        weights = _compute_weights(
-            cls_output,
-            num_select=self._num_biased_select)
+        if self._bool_biased_select_with_submodel:
+            weights = _compute_weights(
+                cls_target, num_select=self._num_biased_select)
+        else:
+            weights = _compute_weights(
+                cls_output, num_select=self._num_biased_select)
         batch_size = preds_dict["cls_preds"].shape[0]
         Logger.log_txt(bcolors.WARNING +
             "Network._compute_distillation_loss() num_select needs to tune." +
             bcolors.ENDC)
         cls_loss = self._distillation_loss_cls_ftor(
-            cls_output,
-            cls_target,
-            weights=weights)
+            cls_output, cls_target, weights=weights)
         reg_output = (preds_dict["box_preds"]
             [:, :num_old_anchor_per_loc, ...]
             .reshape(batch_size, -1, 7))
         reg_target = (preds_dict_sub["box_preds"].detach()
             .reshape(batch_size, -1, 7))
         reg_loss = self._distillation_loss_reg_ftor(
-            reg_output,
-            reg_target,
-            weights=weights)
+            reg_output, reg_target, weights=weights)
         return {
+            "weights": weights,
             "loss_distillation_loss_cls": self._distillation_loss_cls_coef * cls_loss,
             "loss_distillation_loss_reg": self._distillation_loss_reg_coef * reg_loss,
         }
