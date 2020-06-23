@@ -17,6 +17,7 @@ from det3.methods.second.models.losses import get_loss_class
 from det3.methods.second.core.second import add_sin_difference, get_direction_target
 from incdet3.models.rpn import get_rpn_class
 from incdet3.utils.utils import bcolors
+from det3.methods.second.ops.torch_ops import rotate_nms
 
 class Network(nn.Module):
     HEAD_NEAMES = ["rpn.conv_cls", "rpn.conv_box", "rpn.conv_dir_cls"]
@@ -44,6 +45,11 @@ class Network(nn.Module):
         distillation_mode=[],
         bool_oldclass_use_newanchor_for_cls=False,
         bool_biased_select_with_submodel=False,
+        post_center_range=[],
+        nms_score_thresholds=[],
+        nms_pre_max_sizes=[],
+        nms_post_max_sizes=[],
+        nms_iou_thresholds=[],
         ):
         super().__init__()
         self._model = None
@@ -74,6 +80,11 @@ class Network(nn.Module):
         self._distillation_loss_reg_coef = distillation_loss_reg_coef
         self._num_biased_select = num_biased_select
         self._bool_biased_select_with_submodel = bool_biased_select_with_submodel
+        self._post_center_range = post_center_range
+        self._nms_score_thresholds = nms_score_thresholds
+        self._nms_pre_max_sizes = nms_pre_max_sizes
+        self._nms_post_max_sizes = nms_post_max_sizes
+        self._nms_iou_thresholds = nms_iou_thresholds
 
         network_cfg = {
             "VoxelEncoder": voxel_encoder_dict,
@@ -684,8 +695,143 @@ class Network(nn.Module):
             "loss_distillation_loss_reg": self._distillation_loss_reg_coef * reg_loss,
         }
 
-    def predict():
-        raise NotImplementedError
+    def predict(self, example, preds_dict, ext_dict=None):
+        """start with v1.6.0, this function don't contain any kitti-specific code.
+        Returns:
+            predict: list of pred_dict.
+            pred_dict: {
+                box3d_lidar: [N, 7] 3d box.
+                scores: [N]
+                label_preds: [N]
+                metadata: meta-data which contains dataset-specific information.
+                    for kitti, it contains image idx (label idx), 
+                    for nuscenes, sample_token is saved in it.
+            }
+        source: github.com/traveller59/second.pytorch
+        """
+        def limit_period_torch(val, offset=0.5, period=np.pi):
+            return val - torch.floor(val / period + offset) * period
+        batch_size = example['anchors'].shape[0]
+        if "metadata" not in example or len(example["metadata"]) == 0:
+            meta_list = [None] * batch_size
+        else:
+            meta_list = example["metadata"]
+        batch_anchors = example["anchors"].view(batch_size, -1,
+                                                example["anchors"].shape[-1])
+        if "anchors_mask" not in example:
+            batch_anchors_mask = [None] * batch_size
+        else:
+            batch_anchors_mask = example["anchors_mask"].view(batch_size, -1)
+
+        batch_box_preds = preds_dict["box_preds"]
+        batch_cls_preds = preds_dict["cls_preds"]
+        box_coder = ext_dict["box_coder"]
+        num_class_with_bg = len(self._classes_target)
+        batch_dir_preds = preds_dict["dir_cls_preds"]
+        batch_cls_preds = batch_cls_preds.view(batch_size, -1, num_class_with_bg)
+        batch_box_preds = batch_box_preds.view(batch_size, -1, box_coder.code_size)
+        batch_box_preds = box_coder.decode(batch_box_preds, batch_anchors)
+        batch_dir_preds = batch_dir_preds.view(batch_size, -1, 2)
+
+        predictions_dicts = []
+        post_center_range = None
+        if len(self._post_center_range) > 0:
+            post_center_range = torch.tensor(
+                self._post_center_range,
+                dtype=batch_box_preds.dtype,
+                device=batch_box_preds.device).float()
+        for box_preds, cls_preds, dir_preds, a_mask, meta in zip(
+                batch_box_preds, batch_cls_preds, batch_dir_preds,
+                batch_anchors_mask, meta_list):
+            if a_mask is not None:
+                box_preds = box_preds[a_mask]
+                cls_preds = cls_preds[a_mask]
+                dir_preds = dir_preds[a_mask]
+            box_preds = box_preds.float()
+            cls_preds = cls_preds.float()
+            dir_labels = torch.max(dir_preds, dim=-1)[1]
+            total_scores = torch.sigmoid(cls_preds)
+            nms_func = rotate_nms
+            # get highest score per prediction, than apply nms
+            # to remove overlapped box.
+            if num_class_with_bg == 1:
+                top_scores = total_scores.squeeze(-1)
+                top_labels = torch.zeros(
+                    total_scores.shape[0],
+                    device=total_scores.device,
+                    dtype=torch.long)
+            else:
+                top_scores, top_labels = torch.max(
+                    total_scores, dim=-1)
+
+            if self._nms_score_thresholds[0] > 0.0:
+                top_scores_keep = top_scores >= self._nms_score_thresholds[0]
+                top_scores = top_scores.masked_select(top_scores_keep)
+
+            if top_scores.shape[0] != 0:
+                if self._nms_score_thresholds[0] > 0.0:
+                    box_preds = box_preds[top_scores_keep]
+                    dir_labels = dir_labels[top_scores_keep]
+                    top_labels = top_labels[top_scores_keep]
+                boxes_for_nms = box_preds[:, [0, 1, 3, 4, 6]]
+                # the nms in 3d detection just remove overlap boxes.
+                selected = nms_func(
+                    boxes_for_nms,
+                    top_scores,
+                    pre_max_size=self._nms_pre_max_sizes[0],
+                    post_max_size=self._nms_post_max_sizes[0],
+                    iou_threshold=self._nms_iou_thresholds[0],
+                )
+            else:
+                selected = []
+            # if selected is not None:
+            selected_boxes = box_preds[selected]
+            if self._use_direction_classifier:
+                selected_dir_labels = dir_labels[selected]
+            selected_labels = top_labels[selected]
+            selected_scores = top_scores[selected]
+            # finally generate predictions.
+            if selected_boxes.shape[0] != 0:
+                box_preds = selected_boxes
+                scores = selected_scores
+                label_preds = selected_labels
+                dir_labels = selected_dir_labels
+                period = (2 * np.pi / 2)
+                dir_rot = limit_period_torch(box_preds[..., 6], 1, period)
+                box_preds[..., 6] = dir_rot + period * dir_labels.to(box_preds.dtype)
+                final_box_preds = box_preds
+                final_scores = scores
+                final_labels = label_preds
+                if post_center_range is not None:
+                    mask = (final_box_preds[:, :3] >=
+                            post_center_range[:3]).all(1)
+                    mask &= (final_box_preds[:, :3] <=
+                             post_center_range[3:]).all(1)
+                    predictions_dict = {
+                        "box3d_lidar": final_box_preds[mask],
+                        "scores": final_scores[mask],
+                        "label_preds": label_preds[mask],
+                        "metadata": meta,
+                    }
+                else:
+                    predictions_dict = {
+                        "box3d_lidar": final_box_preds,
+                        "scores": final_scores,
+                        "label_preds": label_preds,
+                        "metadata": meta,
+                    }
+            else:
+                dtype = batch_box_preds.dtype
+                device = batch_box_preds.device
+                predictions_dict = {
+                    "box3d_lidar": torch.zeros([0, box_preds.shape[-1]],
+                                dtype=dtype, device=device),
+                    "scores": torch.zeros([0], dtype=dtype, device=device),
+                    "label_preds": torch.zeros([0], dtype=top_labels.dtype, device=device),
+                    "metadata": meta,
+                }
+            predictions_dicts.append(predictions_dict)
+        return predictions_dicts
 
     def train(self):
         assert False, "Network.train() needs unit-test!"

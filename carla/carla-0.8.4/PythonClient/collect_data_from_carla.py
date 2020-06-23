@@ -445,7 +445,7 @@ class CarlaGame(object):
 					continue
 
 				object_label = []
-				object_label.append('pedestrian')
+				object_label.append('Pedestrian')
 				object_label.append(0)
 				object_label.append(0)
 				object_label.append(0)

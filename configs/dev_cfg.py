@@ -1,6 +1,6 @@
 import numpy as np
 from easydict import EasyDict as edict
-from mlod.utils import deg2rad
+from incdet3.utils import deg2rad
 
 cfg = edict()
 
@@ -213,6 +213,7 @@ cfg.NETWORK = {
         },
     }
 }
+
 def modify_cfg(cfg):
     # modify anchor ranges
     for k, v in cfg.TARGETASSIGNER.items():

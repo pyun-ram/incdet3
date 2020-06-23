@@ -70,6 +70,9 @@ def filt_label_by_range(label, valid_range):
     res.current_frame = label.current_frame
     return res
 
+def deg2rad(deg):
+    return deg / 180 * np.pi
+
 class bcolors:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
