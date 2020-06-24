@@ -16,7 +16,7 @@ cfg.TRAIN = {
     "num_save_iter": 5e2,
     "optimizer_dict":{
         "type": "adam",
-        "init_lr": 5e-3,
+        "init_lr": 1e-3,
         "weight_decay": 0.01,
     },
     "lr_scheduler_dict":{
@@ -78,8 +78,8 @@ cfg.TARGETASSIGNER = {
 cfg.TRAINDATA = {
     "dataset": "carla", # carla
     "training": True,
-    "batch_size": 6,
-    "num_workers": 6,
+    "batch_size": 5,
+    "num_workers": 5,
     "feature_map_size": [1, 200, 176],
     "@root_path": "/usr/app/data/CARLA_MULTI/training/",
     "@info_path": "/usr/app/data/CARLA_MULTI/CARLA_infos_train.pkl",
@@ -148,7 +148,7 @@ cfg.NETWORK = {
     "@classes_target": ["Car", "Pedestrian"],
     "@classes_source": None,
     "@model_resume_dict": {
-        "ckpt_path": "saved_weights/incdet-dev-train-from-scratch-multi/IncDetMain-1800.tckpt",
+        "ckpt_path": "saved_weights/incdet-dev-train-from-scratch-multi/IncDetMain-2500.tckpt",
         "num_classes": 1,
         "num_anchor_per_loc": 2,
         "partially_load_params": []
