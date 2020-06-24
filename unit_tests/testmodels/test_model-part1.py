@@ -1067,5 +1067,106 @@ class Test_register_hook(unittest.TestCase):
             else:
                 raise NotImplementedError
 
+class Test_predict(unittest.TestCase):
+    network_cfg_template =  {
+        "VoxelEncoder": {
+            "name": "SimpleVoxel",
+            "@num_input_features": 3,
+        },
+        "MiddleLayer":{
+            "name": "SpMiddleFHD",
+            "@use_norm": True,
+            "@num_input_features": 3,
+            "@output_shape": [1, 41, 1600, 1408, 16], #TBD
+            "downsample_factor": 8
+        },
+        "RPN":{
+            "name": "ResNetRPN",
+            "@use_norm": True,
+            "@num_class": None, # TBD
+            "@layer_nums": [5],
+            "@layer_strides": [1],
+            "@num_filters": [128],
+            "@upsample_strides": [1],
+            "@num_upsample_filters": [128],
+            "@num_input_features": 128,
+            "@num_anchor_per_loc": None, # TBD
+            "@encode_background_as_zeros": True,
+            "@use_direction_classifier": True,
+            "@use_groupnorm": False,
+            "@num_groups": 0,
+            "@box_code_size": 7, # TBD
+            "@num_direction_bins": 2,
+        },
+    }
+    name_template = "IncDetTest"
+    def test_predict(self):
+        for rpn_name in ["RPNV2", "ResNetRPN"]:
+            network_cfg = Test_predict.network_cfg_template.copy()
+            network_cfg["RPN"]["name"] = rpn_name
+            network_cfg["RPN"]["@num_class"] = 2
+            network_cfg["RPN"]["@num_anchor_per_loc"] = 4
+            params = {
+                "classes_target": ["Car", "Pedestrian"],
+                "classes_source": None,
+                "model_resume_dict": None,
+                "sub_model_resume_dict": None,
+                "voxel_encoder_dict": network_cfg["VoxelEncoder"],
+                "middle_layer_dict": network_cfg["MiddleLayer"],
+                "rpn_dict": network_cfg["RPN"],
+                "training_mode": "train_from_scratch",
+                "hook_layers": [],
+                "is_training": True,
+                "bool_oldclass_use_newanchor_for_cls": False,
+                "post_center_range" : [-35.2, -40, -1.5, 35.2, 40, 2.6],
+                "nms_score_thresholds" : [0.6] ,
+                "nms_pre_max_sizes" : [1000],
+                "nms_post_max_sizes" : [100],
+                "nms_iou_thresholds" : [0.3],
+            }
+            network = Network(**params).cuda()
+            from det3.ops import read_pkl
+            from incdet3.builders.dataloader_builder import example_convert_to_torch
+            example = read_pkl("unit_tests/data/test_model.pkl")
+            example = example_convert_to_torch(example,
+                dtype=torch.float32,
+                device=torch.device("cuda:0"))
+            preds_dict = read_pkl("unit_tests/data/test_model_est.pkl")
+            box_coder = preds_dict["box_coder"]
+            pred_dict = preds_dict["pred_dict"]
+            pred_dict["dir_cls_preds"] = torch.zeros_like(pred_dict["box_preds"][..., :2])
+            pred_dict["dir_cls_preds"][..., 0] = 1
+            predictions_dict = network.predict(example, pred_dict, {"box_coder": box_coder})
+            predictions_dict = predictions_dict[0]
+            label = example["metadata"][0]["label"]
+            from det3.dataloader.carladata import CarlaObj, CarlaLabel
+            label_gt = CarlaLabel()
+            label_est = CarlaLabel()
+            for obj_str in label.split("\n"):
+                try:
+                    obj = CarlaObj(obj_str)
+                except:
+                    pass
+                if -35.2 < obj.x < 35.2 and -40 < obj.y < 40:
+                    label_gt.add_obj(obj)
+            for box3d_lidar, label_preds, score in zip(
+                    predictions_dict["box3d_lidar"],
+                    predictions_dict["label_preds"],
+                    predictions_dict["scores"]):
+                obj = CarlaObj()
+                obj.type = "Car" if label_preds == 0 else "Pedestrian"
+                obj.x, obj.y, obj.z, obj.w, obj.l, obj.h, obj.ry = box3d_lidar.cpu().numpy().flatten()
+                obj.truncated = 0
+                obj.occluded = 0
+                obj.alpha = 0
+                obj.bbox_l = 0
+                obj.bbox_t = 0
+                obj.bbox_r = 0
+                obj.bbox_b = 0
+                obj.score = score
+                # if -35.2 < obj.x < 35.2 and -40 < obj.y < 40:
+                label_est.add_obj(obj)
+            self.assertTrue(label_gt.equal(label_est, acc_cls=["Car", "Pedestrian"], rtol=1e-2))
+
 if __name__ == "__main__":
     unittest.main()

@@ -157,6 +157,13 @@ class Test_carladata_general(unittest.TestCase):
         cls_pred = cls_pred[..., 1:]
         anchors = torch.from_numpy(data["anchors"]).cuda().float()
         box_pred = torch.from_numpy(data["reg_targets"]).cuda().float()
+        # pred_dict = {
+        #     "cls_preds": cls_pred * 10,
+        #     "box_preds": box_pred
+        # }
+        # box_coder = self.box_coder
+        # from det3.ops import write_pkl
+        # write_pkl({"pred_dict": pred_dict, "box_coder": box_coder}, "test_model_est.pkl")
         box_pred = self.box_coder.decode(box_pred, anchors)
         for box_preds, cls_preds in zip(box_pred, cls_pred):
             box_preds = box_preds.float()

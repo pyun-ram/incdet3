@@ -7,6 +7,7 @@ To be compatible with "delta", we need to change the rpn part to resnet.
 '''
 import torch
 import torch.nn as nn
+import numpy as np
 from pathlib import Path
 from det3.utils.log_tool import Logger
 from det3.utils.utils import is_param, proc_param
@@ -786,8 +787,7 @@ class Network(nn.Module):
                 selected = []
             # if selected is not None:
             selected_boxes = box_preds[selected]
-            if self._use_direction_classifier:
-                selected_dir_labels = dir_labels[selected]
+            selected_dir_labels = dir_labels[selected]
             selected_labels = top_labels[selected]
             selected_scores = top_scores[selected]
             # finally generate predictions.
