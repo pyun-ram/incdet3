@@ -16,7 +16,7 @@ cfg.TRAIN = {
     "num_save_iter": 5e2,
     "optimizer_dict":{
         "type": "adam",
-        "init_lr": 5e-3,
+        "init_lr": 1e-3,
         "weight_decay": 0.01,
     },
     "lr_scheduler_dict":{
@@ -64,11 +64,11 @@ cfg.TARGETASSIGNER = {
 cfg.TRAINDATA = {
     "dataset": "carla", # carla
     "training": True,
-    "batch_size": 6,
-    "num_workers": 6,
+    "batch_size": 5,
+    "num_workers": 5,
     "feature_map_size": [1, 200, 176],
-    "@root_path": "/usr/app/data/CARLA/training/",
-    "@info_path": "/usr/app/data/CARLA/CARLA_infos_train.pkl",
+    "@root_path": "/usr/app/data/CARLA_MULTI/training/",
+    "@info_path": "/usr/app/data/CARLA_MULTI/CARLA_infos_train.pkl",
     "@class_names": cfg.TARGETASSIGNER["@classes"].copy(),
     "prep": {
         "@training": True,
@@ -102,8 +102,8 @@ cfg.VALDATA = {
     "batch_size": 1,
     "num_workers": 1,
     "feature_map_size": [1, 200, 176],
-    "@root_path": "/usr/app/data/CARLA/training/",
-    "@info_path": "/usr/app/data/CARLA/CARLA_infos_train.pkl",
+    "@root_path": "/usr/app/data/CARLA_MULTI/training/",
+    "@info_path": "/usr/app/data/CARLA_MULTI/CARLA_infos_train.pkl",
     "@class_names": cfg.TARGETASSIGNER["@classes"].copy(),
     "prep": {
         "@training": False,
@@ -119,8 +119,8 @@ cfg.TESTDATA = {
     "batch_size": 1,
     "num_workers": 1,
     "feature_map_size": [1, 200, 176],
-    "@root_path": "/usr/app/data/CARLA/training/",
-    "@info_path": "/usr/app/data/CARLA/CARLA_infos_test.pkl",
+    "@root_path": "/usr/app/data/CARLA_MULTI/training/",
+    "@info_path": "/usr/app/data/CARLA_MULTI/CARLA_infos_test.pkl",
     "@class_names": cfg.TARGETASSIGNER["@classes"].copy(),
     "prep": {
         "@training": False,
