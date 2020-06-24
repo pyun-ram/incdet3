@@ -72,7 +72,6 @@ class Test_compute_loss(unittest.TestCase):
             "rpn_dict": network_cfg["RPN"],
             "training_mode": "lwf",
             "is_training": True,
-            "sin_error_factor": 1.0,
             "pos_cls_weight": 1.0,
             "neg_cls_weight": 1.0,
             "l2sp_alpha_coef": 2.0,

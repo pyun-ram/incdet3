@@ -138,10 +138,13 @@ class Network(nn.Module):
             resume_dict=self._model_resume_dict,
             name="IncDetMain")
         if self._model_resume_dict is not None:
-            resume_step = self._model_resume_dict["ckpt_path"].split("/")[-1]
-            resume_step = resume_step.split(".")[0]
-            resume_step = int(resume_step.split("-")[-1])
-            self.global_step += resume_step
+            try:
+                resume_step = self._model_resume_dict["ckpt_path"].split("/")[-1]
+                resume_step = resume_step.split(".")[0]
+                resume_step = int(resume_step.split("-")[-1])
+                self.global_step += resume_step
+            except:
+                Logger.log_txt("Failed to parse global_step from ckpt_path. Will train from step 0.")
         if self._training_mode == "lwf":
             self._sub_model = self._build_model_and_init(
                 classes=self._classes_source,
