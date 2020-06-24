@@ -6,12 +6,14 @@ cfg = edict()
 
 cfg.TASK = {
     "valid_range": [-35.2, -40, -1.5, 35.2, 40, 2.6],
-    "total_training_steps": 40e3,
+    "total_training_steps": 2e3,
 }
 
 cfg.TRAIN = {
-    "num_epochs": 50,
-    "disp_itv": 20, # steps
+    "train_iter": cfg.TASK["total_training_steps"],
+    "num_log_iter": 10,
+    "num_val_iter": 3e2,
+    "num_save_iter": 3e2,
     "optimizer_dict":{
         "type": "adam",
         "init_lr": 5e-3,
@@ -34,8 +36,7 @@ cfg.VOXELIZER = {
 
 cfg.TARGETASSIGNER = {
     "type": "TaskAssignerV1",
-    # "@classes": ["Car", "Pedestrian"],
-    "@classes": ["Car", "Pedestrian", "Pedestrian2"],
+    "@classes": ["Car"],
     "@feature_map_sizes": None,
     "@positive_fraction": None,
     "@sample_size": 512,
@@ -58,43 +59,16 @@ cfg.TARGETASSIGNER = {
             "type": "NearestIoUSimilarity"
         }
     },
-    "class_settings_pedestrian": {
-        "AnchorGenerator": {
-            "type": "AnchorGeneratorBEV",
-            "@class_name": "Pedestrian",
-            "@anchor_ranges": cfg.TASK["valid_range"].copy(), # TBD in modify_cfg(cfg)
-            "@sizes": [0.6, 0.8, 1.73], # wlh
-            "@rotations": [0, 1.57],
-            "@match_threshold": 0.6,
-            "@unmatch_threshold": 0.45,
-        },
-        "SimilarityCalculator": {
-            "type": "NearestIoUSimilarity"
-        }
-    },
-    "class_settings_pedestrian2": {
-        "AnchorGenerator": {
-            "type": "AnchorGeneratorBEV",
-            "@class_name": "Pedestrian2",
-            "@anchor_ranges": cfg.TASK["valid_range"].copy(), # TBD in modify_cfg(cfg)
-            "@sizes": [0.61, 0.81, 1.731], # wlh
-            "@rotations": [0, 1.57],
-            "@match_threshold": 0.6,
-            "@unmatch_threshold": 0.45,
-        },
-        "SimilarityCalculator": {
-            "type": "NearestIoUSimilarity"
-        }
-    },
 }
 
 cfg.TRAINDATA = {
     "dataset": "carla", # carla
     "training": True,
-    "batch_size": 1,
-    "num_workers": 1,
+    "batch_size": 6,
+    "num_workers": 6,
+    "feature_map_size": [1, 200, 176],
     "@root_path": "/usr/app/data/CARLA/training/",
-    "@info_path": "/usr/app/data/CARLA/CARLA_infos_dev.pkl",
+    "@info_path": "/usr/app/data/CARLA/CARLA_infos_train.pkl",
     "@class_names": cfg.TARGETASSIGNER["@classes"].copy(),
     "prep": {
         "@training": True,
@@ -116,7 +90,8 @@ cfg.TRAINDATA = {
             "label_range": cfg.TASK["valid_range"].copy(),
             # [min_x, min_y, min_z, max_x, max_y, max_z] FIMU
         },
-        "@feature_map_size": None # TBD
+        "@feature_map_size": None, # TBD
+        "@classes_to_exclude": []
     }
 }
 
@@ -126,8 +101,26 @@ cfg.VALDATA = {
     "training": False,
     "batch_size": 1,
     "num_workers": 1,
+    "feature_map_size": [1, 200, 176],
     "@root_path": "/usr/app/data/CARLA/training/",
-    "@info_path": "/usr/app/data/CARLA/CARLA_infos_dev.pkl",
+    "@info_path": "/usr/app/data/CARLA/CARLA_infos_train.pkl",
+    "@class_names": cfg.TARGETASSIGNER["@classes"].copy(),
+    "prep": {
+        "@training": False,
+        "@augment_dict": None,
+        "@filter_label_dict": dict(),
+        "@feature_map_size": None # TBD
+    }
+}
+
+cfg.TESTDATA = {
+    "dataset": "carla", # carla
+    "training": False,
+    "batch_size": 1,
+    "num_workers": 1,
+    "feature_map_size": [1, 200, 176],
+    "@root_path": "/usr/app/data/CARLA/training/",
+    "@info_path": "/usr/app/data/CARLA/CARLA_infos_test.pkl",
     "@class_names": cfg.TARGETASSIGNER["@classes"].copy(),
     "prep": {
         "@training": False,
@@ -138,23 +131,15 @@ cfg.VALDATA = {
 }
 
 cfg.NETWORK = {
-    "@classes_target": ["Car", "Pedestrian", "Pedestrian2"],
-    "@classes_source": ["Car", "Pedestrian",],
+    "@classes_target": ["Car"],
+    "@classes_source": None,
     "@model_resume_dict": {
-        "ckpt_path": "./IncDetMain-2.tckpt",
-        "num_classes": 2,
-        "num_anchor_per_loc": 4,
-        "partially_load_params": [
-            "rpn.conv_cls.weight", "rpn.conv_cls.bias",
-            "rpn.conv_box.weight", "rpn.conv_box.bias",
-            "rpn.conv_dir_cls.weight", "rpn.conv_dir_cls.bias"]
-    },
-    "@sub_model_resume_dict": {
-        "ckpt_path": "./IncDetMain-2.tckpt",
-        "num_classes": 2,
-        "num_anchor_per_loc": 4,
+        "ckpt_path": "saved_weights/incdet-dev-0001/IncDetMain-5000.tckpt",
+        "num_classes": 1,
+        "num_anchor_per_loc": 2,
         "partially_load_params": []
     },
+    "@sub_model_resume_dict": None,
     "@voxel_encoder_dict": {
         "name": "SimpleVoxel",
         "@num_input_features": 4,
@@ -163,27 +148,40 @@ cfg.NETWORK = {
         "name": "SpMiddleFHD",
         "@use_norm": True,
         "@num_input_features": 4,
-        "@output_shape": None, #TBD
+        "@output_shape": [1, 41, 1600, 1408, 16], #TBD
         "downsample_factor": 8
     },
     "@rpn_dict":{
         "name": "ResNetRPN",
         "@use_norm": True,
-        "@num_class": None, # TBD
+        "@num_class": None, # TBD in Network._build_model_and_init()
         "@layer_nums": [5],
         "@layer_strides": [1],
         "@num_filters": [128],
         "@upsample_strides": [1],
         "@num_upsample_filters": [128],
         "@num_input_features": 128,
-        "@num_anchor_per_loc": None, # TBD
+        "@num_anchor_per_loc": None, # TBD in Network._build_model_and_init()
         "@encode_background_as_zeros": True,
         "@use_direction_classifier": True,
         "@use_groupnorm": False,
         "@num_groups": 0,
-        "@box_code_size": None, # TBD
+        "@box_code_size": 7, # TBD
         "@num_direction_bins": 2,
     },
+    "@training_mode": "train_from_scratch",
+    "@is_training": None, #TBD
+    "@cls_loss_weight": 1.0,
+    "@loc_loss_weight": 2.0,
+    "@dir_loss_weight": 0.2,
+    "@pos_cls_weight": 1.0,
+    "@neg_cls_weight": 1.0,
+    "@l2sp_alpha_coef": 1.0,
+    "@l2sp_beta_coef": 1.0,
+    "@delta_coef": 1.0,
+    "@distillation_loss_cls_coef": 1.0,
+    "@distillation_loss_reg_coef": 1.0,
+    "@num_biased_select": 64,
     "@loss_dict": {
         "ClassificationLoss":{
             "name": "SigmoidFocalClassificationLoss",
@@ -202,7 +200,7 @@ cfg.NETWORK = {
         "DistillationClassificationLoss":{
             "name": "WeightedSmoothL1LocalizationLoss",
             "@sigma": 1.0,
-            "@code_weights": None, # TBD
+            "@code_weights": None, # TBD in modify_cfg()
             "@codewise": True,
         },
         "DistillationRegressionLoss":{
@@ -211,17 +209,31 @@ cfg.NETWORK = {
             "@code_weights": [1.0] * 7,
             "@codewise": True,
         },
-    }
+    },
+    "@hook_layers": [],
+    "@distillation_mode": [],
+    "@bool_oldclass_use_newanchor_for_cls": False,
+    "@bool_biased_select_with_submodel": True,
+    "@post_center_range": cfg.TASK["valid_range"].copy(),
+    "@nms_score_thresholds": [0.3],
+    "@nms_pre_max_sizes": [2000],
+    "@nms_post_max_sizes": [500],
+    "@nms_iou_thresholds": [0.3],
+    "@box_coder": None #TBD in main.py
 }
 
-def modify_cfg(cfg):
+def modify_cfg(cfg_):
     # modify anchor ranges
-    for k, v in cfg.TARGETASSIGNER.items():
+    for k, v in cfg_.TARGETASSIGNER.items():
         if "class_settings_" in k:
-            cfg.TARGETASSIGNER[k]["AnchorGenerator"]["@anchor_ranges"] = cfg.TASK["valid_range"].copy()
-            cfg.TARGETASSIGNER[k]["AnchorGenerator"]["@anchor_ranges"][2] = 0.0
-            cfg.TARGETASSIGNER[k]["AnchorGenerator"]["@anchor_ranges"][-1] = 0.0
+            cfg_.TARGETASSIGNER[k]["AnchorGenerator"]["@anchor_ranges"] = cfg_.TASK["valid_range"].copy()
+            cfg_.TARGETASSIGNER[k]["AnchorGenerator"]["@anchor_ranges"][2] = 0.0
+            cfg_.TARGETASSIGNER[k]["AnchorGenerator"]["@anchor_ranges"][-1] = 0.0
     # modify num_old_classes for distillation_loss
-    if cfg.NETWORK["@loss_dict"].has_key("DistillationClassificationLoss"):
-        num_old_classes = len(cfg.NETWORK["@classes_source"])
-        cfg.NETWORK["@loss_dict"]["DistillationClassificationLoss"]["code_weights"] = [1.0] * num_old_classes
+    key_list = [itm for itm in cfg_.NETWORK["@loss_dict"].keys()]
+    if "DistillationClassificationLoss" in key_list:
+        num_old_classes = len(cfg_.NETWORK["@classes_source"]) if cfg_.NETWORK["@classes_source"] is not None else 0
+        cfg_.NETWORK["@loss_dict"]["DistillationClassificationLoss"]["code_weights"] = [1.0] * num_old_classes
+
+def check_cfg(cfg_):
+    return True

@@ -3,6 +3,7 @@ The dataset should support class selection.
 The gt_database temporally is not needed, but will be added for including exemplars.
 Otherpart can be inherited from mlod project.
 '''
+import numpy as np
 from det3.utils.utils import load_pickle
 from det3.ops import read_npy
 from incdet3.data.carlaeval import get_eval_result
@@ -21,6 +22,10 @@ class CarlaDataset:
 
     def __len__(self):
         return len(self._carla_infos)
+
+    @property
+    def class_names(self):
+        return self._class_names
 
     def __getitem__(self, idx):
         input_dict = self.get_sensor_data(idx)

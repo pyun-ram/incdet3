@@ -32,7 +32,9 @@ class Network(nn.Module):
         rpn_dict,
         training_mode,
         is_training,
-        sin_error_factor=1.0,
+        cls_loss_weight=1.0,
+        loc_loss_weight=1.0,
+        dir_loss_weight=1.0,
         pos_cls_weight=1.0,
         neg_cls_weight=1.0,
         l2sp_alpha_coef=1.0,
@@ -73,6 +75,9 @@ class Network(nn.Module):
         self.register_buffer("global_step", torch.LongTensor(1).zero_())
         self._box_coder = box_coder
 
+        self._cls_loss_weight = cls_loss_weight
+        self._loc_loss_weight = loc_loss_weight
+        self._dir_loss_weight = dir_loss_weight
         self._pos_cls_weight = pos_cls_weight
         self._neg_cls_weight = neg_cls_weight
         self._loss_norm_type = "NormByNumPositives"
@@ -101,7 +106,6 @@ class Network(nn.Module):
             param = {proc_param(k):v
                 for k, v in loss_dict["LocalizationLoss"].items() if is_param(k)}
             self._loc_loss_ftor = get_loss_class(loss_dict["LocalizationLoss"]["name"])(**param)
-            self._sin_error_factor = sin_error_factor
             param = {proc_param(k):v
                 for k, v in loss_dict["DirectionLoss"].items() if is_param(k)}
             self._dir_cls_loss_ftor = get_loss_class(loss_dict["DirectionLoss"]["name"])(**param)
@@ -133,6 +137,11 @@ class Network(nn.Module):
             network_cfg=network_cfg,
             resume_dict=self._model_resume_dict,
             name="IncDetMain")
+        if self._model_resume_dict is not None:
+            resume_step = self._model_resume_dict["ckpt_path"].split("/")[-1]
+            resume_step = resume_step.split(".")[0]
+            resume_step = int(resume_step.split("-")[-1])
+            self.global_step += resume_step
         if self._training_mode == "lwf":
             self._sub_model = self._build_model_and_init(
                 classes=self._classes_source,
@@ -262,7 +271,8 @@ class Network(nn.Module):
             return self.loss(data, preds_dict, channel_weights=self._channel_weights)
         else:
             with torch.no_grad():
-                res = self.predict(example, preds_dict, ext_dict=self._box_coder)
+                res = self.predict(data, preds_dict,
+                    ext_dict={"box_coder":self._box_coder})
             return res
 
     @staticmethod
@@ -443,28 +453,24 @@ class Network(nn.Module):
         loss_dict["loss_cls"] = self._compute_classification_loss(
             est=cls_preds,
             gt=cls_targets,
-            weights=weights["cls_weights"])
+            weights=weights["cls_weights"]*importance)*self._cls_loss_weight
         loss_dict["loss_reg"] = self._compute_location_loss(
             est=box_preds,
             gt=reg_targets,
-            weights=weights["reg_weights"])
-        if self._use_direction_classifier:
-            dir_targets = get_direction_target(
-                example["anchors"],
-                reg_targets,
-                dir_offset=0,
-                num_bins=2)
-            dir_logits = preds_dict["dir_cls_preds"].view(
-                batch_size_dev, -1, 2)
-            loss_dict["loss_dir_cls"] = self._compute_direction_loss(
-                est=dir_logits,
-                gt=dir_targets,
-                weights=weights["dir_weights"])
+            weights=weights["reg_weights"]*importance)*self._loc_loss_weight
+        dir_targets = get_direction_target(
+            example["anchors"],
+            reg_targets,
+            dir_offset=0,
+            num_bins=2)
+        dir_logits = preds_dict["dir_cls_preds"].view(batch_size_dev, -1, 2)
+        loss_dict["loss_dir_cls"] = self._compute_direction_loss(
+            est=dir_logits,
+            gt=dir_targets,
+            weights=weights["dir_weights"]*importance)*self._dir_loss_weight
         if "l2sp" in self._distillation_mode:
-            # call model weights in the _compute_l2sp_loss()
             loss_dict["loss_l2sp"] = self._compute_l2sp_loss()
         if "delta" in self._distillation_mode:
-            # call hook features in the _compute_l2sp_loss()
             preds_dict_sub = self._network_forward(self._sub_model,
                 example["voxels"],
                 example["num_points"],
@@ -474,17 +480,17 @@ class Network(nn.Module):
             self._hook_features_model.clear()
             self._hook_features_submodel.clear()
         if "distillation_loss" in self._distillation_mode:
-            # call hook features in the _compute_l2sp_loss()
             if "delta" not in self._distillation_mode:
                 preds_dict_sub = self._network_forward(self._sub_model,
                     example["voxels"],
                     example["num_points"],
                     example["coordinates"],
                     example["anchors"].shape[0])
-            loss_dl = self._compute_distillation_loss(
-                preds_dict, preds_dict_sub)
+            loss_dl = self._compute_distillation_loss(preds_dict, preds_dict_sub)
             loss_dict["loss_distillation_loss_cls"] = loss_dl["loss_distillation_loss_cls"]
             loss_dict["loss_distillation_loss_reg"] = loss_dl["loss_distillation_loss_reg"]
+        for k, v in loss_dict.items():
+            loss_dict[k] = v.sum() / batch_size_dev
         loss_dict["loss_total"] = sum(loss_dict.values())
         return loss_dict
 
@@ -568,8 +574,7 @@ class Network(nn.Module):
         gt_box = gt
         est_box, gt_box = add_sin_difference(
             est_box, gt_box,
-            est_box[..., 6:7], gt_box[..., 6:7],
-            self._sin_error_factor)
+            est_box[..., 6:7], gt_box[..., 6:7], factor=1.0)
         return self._loc_loss_ftor(est_box, gt_box, weights=weights)
 
     def _compute_direction_loss(self,
@@ -842,6 +847,7 @@ class Network(nn.Module):
         return predictions_dicts
 
     def train(self):
+        super(Network, self).train(True)
         if self._training_mode == "train_from_scratch":
             self._model.train()
             assert self._sub_model is None
@@ -854,6 +860,7 @@ class Network(nn.Module):
             raise NotImplementedError
     
     def eval(self):
+        super(Network, self).train(False)
         self._model.eval()
         if self._sub_model is not None:
             self._sub_model.eval()
