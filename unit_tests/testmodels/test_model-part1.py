@@ -1168,5 +1168,515 @@ class Test_predict(unittest.TestCase):
                 label_est.add_obj(obj)
             self.assertTrue(label_gt.equal(label_est, acc_cls=["Car", "Pedestrian"], rtol=1e-2))
 
+class Test_train(unittest.TestCase):
+    network_cfg_template =  {
+        "VoxelEncoder": {
+            "name": "SimpleVoxel",
+            "@num_input_features": 3,
+        },
+        "MiddleLayer":{
+            "name": "SpMiddleFHD",
+            "@use_norm": True,
+            "@num_input_features": 3,
+            "@output_shape": [1, 41, 1600, 1408, 16], #TBD
+            "downsample_factor": 8
+        },
+        "RPN":{
+            "name": "ResNetRPN",
+            "@use_norm": True,
+            "@num_class": None, # TBD
+            "@layer_nums": [5],
+            "@layer_strides": [1],
+            "@num_filters": [128],
+            "@upsample_strides": [1],
+            "@num_upsample_filters": [128],
+            "@num_input_features": 128,
+            "@num_anchor_per_loc": None, # TBD
+            "@encode_background_as_zeros": True,
+            "@use_direction_classifier": True,
+            "@use_groupnorm": False,
+            "@num_groups": 0,
+            "@box_code_size": 7, # TBD
+            "@num_direction_bins": 2,
+        },
+    }
+    name_template = "IncDetTest"
+    def test_train_train_from_scratch(self):
+        for rpn_name in ["RPNV2", "ResNetRPN"]:
+            network_cfg = Test_train.network_cfg_template.copy()
+            network_cfg["RPN"]["name"] = rpn_name
+            network_cfg["RPN"]["@num_class"] = 2
+            network_cfg["RPN"]["@num_anchor_per_loc"] = 4
+            params = {
+                "classes_target": ["Car", "Pedestrian"],
+                "classes_source": None,
+                "model_resume_dict": None,
+                "sub_model_resume_dict": None,
+                "voxel_encoder_dict": network_cfg["VoxelEncoder"],
+                "middle_layer_dict": network_cfg["MiddleLayer"],
+                "rpn_dict": network_cfg["RPN"],
+                "training_mode": "train_from_scratch",
+                "hook_layers": [],
+                "is_training": True,
+                "bool_oldclass_use_newanchor_for_cls": False,
+                "post_center_range" : [-35.2, -40, -1.5, 35.2, 40, 2.6],
+                "nms_score_thresholds" : [0.6] ,
+                "nms_pre_max_sizes" : [1000],
+                "nms_post_max_sizes" : [100],
+                "nms_iou_thresholds" : [0.3],
+            }
+            network = Network(**params).cuda()
+            from det3.ops import read_pkl
+            from incdet3.builders.dataloader_builder import example_convert_to_torch
+            from copy import deepcopy
+            example = read_pkl("unit_tests/data/test_model.pkl")
+            example = example_convert_to_torch(example,
+                dtype=torch.float32,
+                device=torch.device("cuda:0"))
+            
+            network.train()
+            network_sd1 = deepcopy(network.state_dict())
+            voxels = example["voxels"]
+            num_points = example["num_points"]
+            coors = example["coordinates"]
+            batch_anchors = example["anchors"]
+            batch_size = batch_anchors.shape[0]
+            preds_dict = network._network_forward(network._model, voxels, num_points, coors, batch_size)
+            box_preds = preds_dict["box_preds"].view(batch_size, -1, 7)
+            err_msg = f"num_anchors={batch_anchors.shape[1]}, but num_output={box_preds.shape[1]}. please check size"
+            assert batch_anchors.shape[1] == box_preds.shape[1], err_msg
+            network._detach_variables(preds_dict)
+            network_sd2 = deepcopy(network.state_dict())
+
+            for k, v in network_sd1.items():
+                if "weight" in k or "bias" in k or "global_step" in k:
+                    continue
+                else:
+                    self.assertFalse(torch.all(v == network_sd2[k]))
+
+    def test_joint_training(self):
+        for rpn_name in ["RPNV2", "ResNetRPN"]:
+            network_cfg = Test_train.network_cfg_template.copy()
+            network_cfg["RPN"]["name"] = rpn_name
+            network_cfg["RPN"]["@num_class"] = 2
+            network_cfg["RPN"]["@num_anchor_per_loc"] = 4
+            params = {
+                "classes_target": ["Car", "Pedestrian"],
+                "classes_source": None,
+                "model_resume_dict": None,
+                "sub_model_resume_dict": None,
+                "voxel_encoder_dict": network_cfg["VoxelEncoder"],
+                "middle_layer_dict": network_cfg["MiddleLayer"],
+                "rpn_dict": network_cfg["RPN"],
+                "training_mode": "joint_training",
+                "hook_layers": [],
+                "is_training": True,
+                "bool_oldclass_use_newanchor_for_cls": False,
+                "post_center_range" : [-35.2, -40, -1.5, 35.2, 40, 2.6],
+                "nms_score_thresholds" : [0.6] ,
+                "nms_pre_max_sizes" : [1000],
+                "nms_post_max_sizes" : [100],
+                "nms_iou_thresholds" : [0.3],
+            }
+            network = Network(**params).cuda()
+            from det3.ops import read_pkl
+            from incdet3.builders.dataloader_builder import example_convert_to_torch
+            from copy import deepcopy
+            example = read_pkl("unit_tests/data/test_model.pkl")
+            example = example_convert_to_torch(example,
+                dtype=torch.float32,
+                device=torch.device("cuda:0"))
+            
+            network.train()
+            network_sd1 = deepcopy(network.state_dict())
+            voxels = example["voxels"]
+            num_points = example["num_points"]
+            coors = example["coordinates"]
+            batch_anchors = example["anchors"]
+            batch_size = batch_anchors.shape[0]
+            preds_dict = network._network_forward(network._model, voxels, num_points, coors, batch_size)
+            box_preds = preds_dict["box_preds"].view(batch_size, -1, 7)
+            err_msg = f"num_anchors={batch_anchors.shape[1]}, but num_output={box_preds.shape[1]}. please check size"
+            assert batch_anchors.shape[1] == box_preds.shape[1], err_msg
+            network._detach_variables(preds_dict)
+            network_sd2 = deepcopy(network.state_dict())
+
+            for k, v in network_sd1.items():
+                self.assertTrue(torch.all(v == network_sd2[k]))
+
+    def test_fine_tuning(self):
+        for rpn_name in ["RPNV2", "ResNetRPN"]:
+            network_cfg = Test_train.network_cfg_template.copy()
+            network_cfg["RPN"]["name"] = rpn_name
+            network_cfg["RPN"]["@num_class"] = 2
+            network_cfg["RPN"]["@num_anchor_per_loc"] = 4
+            params = {
+                "classes_target": ["Car", "Pedestrian"],
+                "classes_source": ["Car"],
+                "model_resume_dict": {
+                    "ckpt_path": None,
+                    "num_classes": 1,
+                    "num_anchor_per_loc": 2,
+                    "partially_load_params": []
+                },
+                "sub_model_resume_dict": {
+                    "num_classes": 1,
+                    "num_anchor_per_loc": 2,
+                    "ckpt_path": None,
+                    "partially_load_params": []
+                },
+                "voxel_encoder_dict": network_cfg["VoxelEncoder"],
+                "middle_layer_dict": network_cfg["MiddleLayer"],
+                "rpn_dict": network_cfg["RPN"],
+                "training_mode": "fine_tuning",
+                "hook_layers": [],
+                "is_training": True,
+                "bool_oldclass_use_newanchor_for_cls": False,
+                "post_center_range" : [-35.2, -40, -1.5, 35.2, 40, 2.6],
+                "nms_score_thresholds" : [0.6] ,
+                "nms_pre_max_sizes" : [1000],
+                "nms_post_max_sizes" : [100],
+                "nms_iou_thresholds" : [0.3],
+            }
+            network = Network(**params).cuda()
+            from det3.ops import read_pkl
+            from incdet3.builders.dataloader_builder import example_convert_to_torch
+            from copy import deepcopy
+            example = read_pkl("unit_tests/data/test_model.pkl")
+            example = example_convert_to_torch(example,
+                dtype=torch.float32,
+                device=torch.device("cuda:0"))
+            
+            network.train()
+            network_sd1 = deepcopy(network.state_dict())
+            voxels = example["voxels"]
+            num_points = example["num_points"]
+            coors = example["coordinates"]
+            batch_anchors = example["anchors"]
+            batch_size = batch_anchors.shape[0]
+            preds_dict = network._network_forward(network._model, voxels, num_points, coors, batch_size)
+            box_preds = preds_dict["box_preds"].view(batch_size, -1, 7)
+            err_msg = f"num_anchors={batch_anchors.shape[1]}, but num_output={box_preds.shape[1]}. please check size"
+            assert batch_anchors.shape[1] == box_preds.shape[1], err_msg
+            network._detach_variables(preds_dict)
+            network_sd2 = deepcopy(network.state_dict())
+
+            for k, v in network_sd1.items():
+                self.assertTrue(torch.all(v == network_sd2[k]))
+
+    def test_lwf(self):
+        for rpn_name in ["RPNV2", "ResNetRPN"]:
+            network_cfg = Test_train.network_cfg_template.copy()
+            network_cfg["RPN"]["name"] = rpn_name
+            network_cfg["RPN"]["@num_class"] = 2
+            network_cfg["RPN"]["@num_anchor_per_loc"] = 4
+            params = {
+                "classes_target": ["Car", "Pedestrian"],
+                "classes_source": ["Car"],
+                "model_resume_dict": {
+                    "ckpt_path": None,
+                    "num_classes": 1,
+                    "num_anchor_per_loc": 2,
+                    "partially_load_params": []
+                },
+                "sub_model_resume_dict": {
+                    "num_classes": 1,
+                    "num_anchor_per_loc": 2,
+                    "ckpt_path": None,
+                    "partially_load_params": []
+                },
+                "voxel_encoder_dict": network_cfg["VoxelEncoder"],
+                "middle_layer_dict": network_cfg["MiddleLayer"],
+                "rpn_dict": network_cfg["RPN"],
+                "training_mode": "lwf",
+                "hook_layers": [],
+                "is_training": True,
+                "bool_oldclass_use_newanchor_for_cls": False,
+                "post_center_range" : [-35.2, -40, -1.5, 35.2, 40, 2.6],
+                "nms_score_thresholds" : [0.6] ,
+                "nms_pre_max_sizes" : [1000],
+                "nms_post_max_sizes" : [100],
+                "nms_iou_thresholds" : [0.3],
+            }
+            network = Network(**params).cuda()
+            from det3.ops import read_pkl
+            from incdet3.builders.dataloader_builder import example_convert_to_torch
+            from copy import deepcopy
+            example = read_pkl("unit_tests/data/test_model.pkl")
+            example = example_convert_to_torch(example,
+                dtype=torch.float32,
+                device=torch.device("cuda:0"))
+            
+            network.train()
+            network_sd1 = deepcopy(network.state_dict())
+            voxels = example["voxels"]
+            num_points = example["num_points"]
+            coors = example["coordinates"]
+            batch_anchors = example["anchors"]
+            batch_size = batch_anchors.shape[0]
+            preds_dict = network._network_forward(network._model, voxels, num_points, coors, batch_size)
+            box_preds = preds_dict["box_preds"].view(batch_size, -1, 7)
+            err_msg = f"num_anchors={batch_anchors.shape[1]}, but num_output={box_preds.shape[1]}. please check size"
+            assert batch_anchors.shape[1] == box_preds.shape[1], err_msg
+            network._detach_variables(preds_dict)
+            network_sd2 = deepcopy(network.state_dict())
+
+            for k, v in network_sd1.items():
+                self.assertTrue(torch.all(v == network_sd2[k]))
+
+
+class Test_eval(unittest.TestCase):
+    network_cfg_template =  {
+        "VoxelEncoder": {
+            "name": "SimpleVoxel",
+            "@num_input_features": 3,
+        },
+        "MiddleLayer":{
+            "name": "SpMiddleFHD",
+            "@use_norm": True,
+            "@num_input_features": 3,
+            "@output_shape": [1, 41, 1600, 1408, 16], #TBD
+            "downsample_factor": 8
+        },
+        "RPN":{
+            "name": "ResNetRPN",
+            "@use_norm": True,
+            "@num_class": None, # TBD
+            "@layer_nums": [5],
+            "@layer_strides": [1],
+            "@num_filters": [128],
+            "@upsample_strides": [1],
+            "@num_upsample_filters": [128],
+            "@num_input_features": 128,
+            "@num_anchor_per_loc": None, # TBD
+            "@encode_background_as_zeros": True,
+            "@use_direction_classifier": True,
+            "@use_groupnorm": False,
+            "@num_groups": 0,
+            "@box_code_size": 7, # TBD
+            "@num_direction_bins": 2,
+        },
+    }
+    name_template = "IncDetTest"
+    def test_train_train_from_scratch(self):
+        for rpn_name in ["RPNV2", "ResNetRPN"]:
+            network_cfg = Test_eval.network_cfg_template.copy()
+            network_cfg["RPN"]["name"] = rpn_name
+            network_cfg["RPN"]["@num_class"] = 2
+            network_cfg["RPN"]["@num_anchor_per_loc"] = 4
+            params = {
+                "classes_target": ["Car", "Pedestrian"],
+                "classes_source": None,
+                "model_resume_dict": None,
+                "sub_model_resume_dict": None,
+                "voxel_encoder_dict": network_cfg["VoxelEncoder"],
+                "middle_layer_dict": network_cfg["MiddleLayer"],
+                "rpn_dict": network_cfg["RPN"],
+                "training_mode": "train_from_scratch",
+                "hook_layers": [],
+                "is_training": True,
+                "bool_oldclass_use_newanchor_for_cls": False,
+                "post_center_range" : [-35.2, -40, -1.5, 35.2, 40, 2.6],
+                "nms_score_thresholds" : [0.6] ,
+                "nms_pre_max_sizes" : [1000],
+                "nms_post_max_sizes" : [100],
+                "nms_iou_thresholds" : [0.3],
+            }
+            network = Network(**params).cuda()
+            from det3.ops import read_pkl
+            from incdet3.builders.dataloader_builder import example_convert_to_torch
+            from copy import deepcopy
+            example = read_pkl("unit_tests/data/test_model.pkl")
+            example = example_convert_to_torch(example,
+                dtype=torch.float32,
+                device=torch.device("cuda:0"))
+            
+            network.eval()
+            network_sd1 = deepcopy(network.state_dict())
+            voxels = example["voxels"]
+            num_points = example["num_points"]
+            coors = example["coordinates"]
+            batch_anchors = example["anchors"]
+            batch_size = batch_anchors.shape[0]
+            preds_dict = network._network_forward(network._model, voxels, num_points, coors, batch_size)
+            box_preds = preds_dict["box_preds"].view(batch_size, -1, 7)
+            err_msg = f"num_anchors={batch_anchors.shape[1]}, but num_output={box_preds.shape[1]}. please check size"
+            assert batch_anchors.shape[1] == box_preds.shape[1], err_msg
+            network._detach_variables(preds_dict)
+            network_sd2 = deepcopy(network.state_dict())
+
+            for k, v in network_sd1.items():
+                self.assertTrue(torch.all(v == network_sd2[k]))
+
+    def test_joint_training(self):
+        for rpn_name in ["RPNV2", "ResNetRPN"]:
+            network_cfg = Test_eval.network_cfg_template.copy()
+            network_cfg["RPN"]["name"] = rpn_name
+            network_cfg["RPN"]["@num_class"] = 2
+            network_cfg["RPN"]["@num_anchor_per_loc"] = 4
+            params = {
+                "classes_target": ["Car", "Pedestrian"],
+                "classes_source": None,
+                "model_resume_dict": None,
+                "sub_model_resume_dict": None,
+                "voxel_encoder_dict": network_cfg["VoxelEncoder"],
+                "middle_layer_dict": network_cfg["MiddleLayer"],
+                "rpn_dict": network_cfg["RPN"],
+                "training_mode": "joint_training",
+                "hook_layers": [],
+                "is_training": True,
+                "bool_oldclass_use_newanchor_for_cls": False,
+                "post_center_range" : [-35.2, -40, -1.5, 35.2, 40, 2.6],
+                "nms_score_thresholds" : [0.6] ,
+                "nms_pre_max_sizes" : [1000],
+                "nms_post_max_sizes" : [100],
+                "nms_iou_thresholds" : [0.3],
+            }
+            network = Network(**params).cuda()
+            from det3.ops import read_pkl
+            from incdet3.builders.dataloader_builder import example_convert_to_torch
+            from copy import deepcopy
+            example = read_pkl("unit_tests/data/test_model.pkl")
+            example = example_convert_to_torch(example,
+                dtype=torch.float32,
+                device=torch.device("cuda:0"))
+            
+            network.eval()
+            network_sd1 = deepcopy(network.state_dict())
+            voxels = example["voxels"]
+            num_points = example["num_points"]
+            coors = example["coordinates"]
+            batch_anchors = example["anchors"]
+            batch_size = batch_anchors.shape[0]
+            preds_dict = network._network_forward(network._model, voxels, num_points, coors, batch_size)
+            box_preds = preds_dict["box_preds"].view(batch_size, -1, 7)
+            err_msg = f"num_anchors={batch_anchors.shape[1]}, but num_output={box_preds.shape[1]}. please check size"
+            assert batch_anchors.shape[1] == box_preds.shape[1], err_msg
+            network._detach_variables(preds_dict)
+            network_sd2 = deepcopy(network.state_dict())
+
+            for k, v in network_sd1.items():
+                self.assertTrue(torch.all(v == network_sd2[k]))
+
+    def test_fine_tuning(self):
+        for rpn_name in ["RPNV2", "ResNetRPN"]:
+            network_cfg = Test_eval.network_cfg_template.copy()
+            network_cfg["RPN"]["name"] = rpn_name
+            network_cfg["RPN"]["@num_class"] = 2
+            network_cfg["RPN"]["@num_anchor_per_loc"] = 4
+            params = {
+                "classes_target": ["Car", "Pedestrian"],
+                "classes_source": ["Car"],
+                "model_resume_dict": {
+                    "ckpt_path": None,
+                    "num_classes": 1,
+                    "num_anchor_per_loc": 2,
+                    "partially_load_params": []
+                },
+                "sub_model_resume_dict": {
+                    "num_classes": 1,
+                    "num_anchor_per_loc": 2,
+                    "ckpt_path": None,
+                    "partially_load_params": []
+                },
+                "voxel_encoder_dict": network_cfg["VoxelEncoder"],
+                "middle_layer_dict": network_cfg["MiddleLayer"],
+                "rpn_dict": network_cfg["RPN"],
+                "training_mode": "fine_tuning",
+                "hook_layers": [],
+                "is_training": True,
+                "bool_oldclass_use_newanchor_for_cls": False,
+                "post_center_range" : [-35.2, -40, -1.5, 35.2, 40, 2.6],
+                "nms_score_thresholds" : [0.6] ,
+                "nms_pre_max_sizes" : [1000],
+                "nms_post_max_sizes" : [100],
+                "nms_iou_thresholds" : [0.3],
+            }
+            network = Network(**params).cuda()
+            from det3.ops import read_pkl
+            from incdet3.builders.dataloader_builder import example_convert_to_torch
+            from copy import deepcopy
+            example = read_pkl("unit_tests/data/test_model.pkl")
+            example = example_convert_to_torch(example,
+                dtype=torch.float32,
+                device=torch.device("cuda:0"))
+            
+            network.eval()
+            network_sd1 = deepcopy(network.state_dict())
+            voxels = example["voxels"]
+            num_points = example["num_points"]
+            coors = example["coordinates"]
+            batch_anchors = example["anchors"]
+            batch_size = batch_anchors.shape[0]
+            preds_dict = network._network_forward(network._model, voxels, num_points, coors, batch_size)
+            box_preds = preds_dict["box_preds"].view(batch_size, -1, 7)
+            err_msg = f"num_anchors={batch_anchors.shape[1]}, but num_output={box_preds.shape[1]}. please check size"
+            assert batch_anchors.shape[1] == box_preds.shape[1], err_msg
+            network._detach_variables(preds_dict)
+            network_sd2 = deepcopy(network.state_dict())
+
+            for k, v in network_sd1.items():
+                self.assertTrue(torch.all(v == network_sd2[k]))
+
+    def test_lwf(self):
+        for rpn_name in ["RPNV2", "ResNetRPN"]:
+            network_cfg = Test_eval.network_cfg_template.copy()
+            network_cfg["RPN"]["name"] = rpn_name
+            network_cfg["RPN"]["@num_class"] = 2
+            network_cfg["RPN"]["@num_anchor_per_loc"] = 4
+            params = {
+                "classes_target": ["Car", "Pedestrian"],
+                "classes_source": ["Car"],
+                "model_resume_dict": {
+                    "ckpt_path": None,
+                    "num_classes": 1,
+                    "num_anchor_per_loc": 2,
+                    "partially_load_params": []
+                },
+                "sub_model_resume_dict": {
+                    "num_classes": 1,
+                    "num_anchor_per_loc": 2,
+                    "ckpt_path": None,
+                    "partially_load_params": []
+                },
+                "voxel_encoder_dict": network_cfg["VoxelEncoder"],
+                "middle_layer_dict": network_cfg["MiddleLayer"],
+                "rpn_dict": network_cfg["RPN"],
+                "training_mode": "lwf",
+                "hook_layers": [],
+                "is_training": True,
+                "bool_oldclass_use_newanchor_for_cls": False,
+                "post_center_range" : [-35.2, -40, -1.5, 35.2, 40, 2.6],
+                "nms_score_thresholds" : [0.6] ,
+                "nms_pre_max_sizes" : [1000],
+                "nms_post_max_sizes" : [100],
+                "nms_iou_thresholds" : [0.3],
+            }
+            network = Network(**params).cuda()
+            from det3.ops import read_pkl
+            from incdet3.builders.dataloader_builder import example_convert_to_torch
+            from copy import deepcopy
+            example = read_pkl("unit_tests/data/test_model.pkl")
+            example = example_convert_to_torch(example,
+                dtype=torch.float32,
+                device=torch.device("cuda:0"))
+            
+            network.eval()
+            network_sd1 = deepcopy(network.state_dict())
+            voxels = example["voxels"]
+            num_points = example["num_points"]
+            coors = example["coordinates"]
+            batch_anchors = example["anchors"]
+            batch_size = batch_anchors.shape[0]
+            preds_dict = network._network_forward(network._model, voxels, num_points, coors, batch_size)
+            box_preds = preds_dict["box_preds"].view(batch_size, -1, 7)
+            err_msg = f"num_anchors={batch_anchors.shape[1]}, but num_output={box_preds.shape[1]}. please check size"
+            assert batch_anchors.shape[1] == box_preds.shape[1], err_msg
+            network._detach_variables(preds_dict)
+            network_sd2 = deepcopy(network.state_dict())
+
+            for k, v in network_sd1.items():
+                self.assertTrue(torch.all(v == network_sd2[k]))
+
 if __name__ == "__main__":
     unittest.main()

@@ -51,6 +51,7 @@ class Network(nn.Module):
         nms_pre_max_sizes=[],
         nms_post_max_sizes=[],
         nms_iou_thresholds=[],
+        box_coder=None
         ):
         super().__init__()
         self._model = None
@@ -70,6 +71,7 @@ class Network(nn.Module):
         self._hook_features_model = []
         self._hook_features_submodel = []
         self.register_buffer("global_step", torch.LongTensor(1).zero_())
+        self._box_coder = box_coder
 
         self._pos_cls_weight = pos_cls_weight
         self._neg_cls_weight = neg_cls_weight
@@ -121,6 +123,10 @@ class Network(nn.Module):
             self._num_old_anchor_per_loc = self._sub_model_resume_dict["num_anchor_per_loc"]
             self._num_new_classes = len(self._classes_target)
             self._num_new_anchor_per_loc = 2 * self._num_new_classes
+
+        self._channel_weights = None
+        if "delta" in self._distillation_mode:
+            self._channel_weights = None # TBD
 
         self._model = Network._build_model_and_init(
             classes=self._classes_target,
@@ -247,16 +253,16 @@ class Network(nn.Module):
         coors = data["coordinates"]
         batch_anchors = data["anchors"]
         batch_size = batch_anchors.shape[0]
-        preds_dict = self.network_forward(voxels, num_points, coors, batch_size)
+        preds_dict = self._network_forward(self._model, voxels, num_points, coors, batch_size)
         box_preds = preds_dict["box_preds"].view(batch_size, -1, 7)
         err_msg = f"num_anchors={batch_anchors.shape[1]}, but num_output={box_preds.shape[1]}. please check size"
         assert batch_anchors.shape[1] == box_preds.shape[1], err_msg
         if self.training:
             self._detach_variables(preds_dict)
-            return self.loss(example, preds_dict)
+            return self.loss(data, preds_dict, channel_weights=self._channel_weights)
         else:
             with torch.no_grad():
-                res = self.predict(example, preds_dict)
+                res = self.predict(example, preds_dict, ext_dict=self._box_coder)
             return res
 
     @staticmethod
@@ -415,7 +421,7 @@ class Network(nn.Module):
     def loss(self,
         example,
         preds_dict,
-        channel_weight=None):
+        channel_weights=None):
         box_preds = preds_dict["box_preds"]
         cls_preds = preds_dict["cls_preds"]
         batch_size_dev = cls_preds.shape[0]
@@ -429,6 +435,8 @@ class Network(nn.Module):
             pos_cls_weight=self._pos_cls_weight,
             neg_cls_weight=self._neg_cls_weight,
             loss_norm_type=self._loss_norm_type,
+            importance=importance,
+            use_direction_classifier=True,
             dtype=box_preds.dtype)
         cls_targets = labels * weights["cared"].type_as(labels)
         cls_targets = cls_targets.unsqueeze(-1)
@@ -834,11 +842,10 @@ class Network(nn.Module):
         return predictions_dicts
 
     def train(self):
-        assert False, "Network.train() needs unit-test!"
-        if self._training_mode == "train-from-scratch":
+        if self._training_mode == "train_from_scratch":
             self._model.train()
             assert self._sub_model is None
-        elif self._training_mode in ["feature-extraction", "joint-training", "lwf"]:
+        elif self._training_mode in ["feature_extraction", "joint_training", "fine_tuning", "lwf"]:
             # freeze bn and no dropout
             self._model.eval()
             if self._sub_model is not None:
@@ -847,7 +854,6 @@ class Network(nn.Module):
             raise NotImplementedError
     
     def eval(self):
-        assert False, "Network.eval() needs unit-test!"
         self._model.eval()
         if self._sub_model is not None:
             self._sub_model.eval()
