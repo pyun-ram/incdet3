@@ -12,8 +12,8 @@ cfg.TASK = {
 cfg.TRAIN = {
     "train_iter": cfg.TASK["total_training_steps"],
     "num_log_iter": 10,
-    "num_val_iter": 3e2,
-    "num_save_iter": 3e2,
+    "num_val_iter": 5e2,
+    "num_save_iter": 5e2,
     "optimizer_dict":{
         "type": "adam",
         "init_lr": 5e-3,
@@ -133,12 +133,7 @@ cfg.TESTDATA = {
 cfg.NETWORK = {
     "@classes_target": ["Car"],
     "@classes_source": None,
-    "@model_resume_dict": {
-        "ckpt_path": "saved_weights/incdet-dev-0001/IncDetMain-5000.tckpt",
-        "num_classes": 1,
-        "num_anchor_per_loc": 2,
-        "partially_load_params": []
-    },
+    "@model_resume_dict": None,
     "@sub_model_resume_dict": None,
     "@voxel_encoder_dict": {
         "name": "SimpleVoxel",
