@@ -1424,7 +1424,6 @@ class Test_train(unittest.TestCase):
             for k, v in network_sd1.items():
                 self.assertTrue(torch.all(v == network_sd2[k]))
 
-
 class Test_eval(unittest.TestCase):
     network_cfg_template =  {
         "VoxelEncoder": {
