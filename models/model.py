@@ -449,6 +449,13 @@ class Network(nn.Module):
         importance = example['importance']
         loss_dict = dict()
 
+        if not self._bool_oldclass_use_newanchor_for_cls:
+            cls_preds_shape = cls_preds.shape
+            num_old_classes = self._num_old_classes
+            num_old_anchor_per_loc = self._num_old_anchor_per_loc
+            labels_ = labels.reshape(*cls_preds_shape[:-1])
+            labels_[:, num_old_anchor_per_loc:, ...] = -1
+            labels = labels_.reshape(cls_preds_shape[0], -1)
         weights = Network._prepare_loss_weights(
             labels,
             pos_cls_weight=self._pos_cls_weight,
@@ -815,6 +822,11 @@ class Network(nn.Module):
             batch_cls_preds[..., num_old_classes:] = -100
             # deactivate new anchors of old classes
             batch_cls_preds[:, num_old_anchor_per_loc:, ..., :num_old_classes] = -100
+        if not self._bool_oldclass_use_newanchor_for_cls:
+            num_old_anchor_per_loc = self._num_old_anchor_per_loc
+            num_old_classes = self._num_old_classes
+            # deactivate new anchors of old classes
+            batch_cls_preds[:, num_old_anchor_per_loc:, ..., :num_old_classes] = -100
 
         batch_cls_preds = batch_cls_preds.view(batch_size, -1, num_class_with_bg)
         batch_box_preds = batch_box_preds.view(batch_size, -1, box_coder.code_size)
@@ -851,11 +863,9 @@ class Network(nn.Module):
             else:
                 top_scores, top_labels = torch.max(
                     total_scores, dim=-1)
-
             if self._nms_score_thresholds[0] > 0.0:
                 top_scores_keep = top_scores >= self._nms_score_thresholds[0]
                 top_scores = top_scores.masked_select(top_scores_keep)
-
             if top_scores.shape[0] != 0:
                 if self._nms_score_thresholds[0] > 0.0:
                     box_preds = box_preds[top_scores_keep]
