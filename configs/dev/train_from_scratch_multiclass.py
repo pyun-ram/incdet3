@@ -63,11 +63,11 @@ cfg.TARGETASSIGNER = {
         "AnchorGenerator": {
             "type": "AnchorGeneratorBEV",
             "@class_name": "Pedestrian",
-            "@anchor_ranges": [-35.2, -40, 0, 35.2, 40, 0], # TBD in modify_cfg(cfg)
+            "@anchor_ranges": cfg.TASK["valid_range"].copy(), # TBD in modify_cfg(cfg)
             "@sizes": [0.6, 0.8, 1.73], # wlh
             "@rotations": [0, 1.57],
-            "@match_threshold": 0.6,
-            "@unmatch_threshold": 0.45,
+            "@match_threshold": 0.35,
+            "@unmatch_threshold": 0.2,
         },
         "SimilarityCalculator": {
             "type": "NearestIoUSimilarity"
@@ -104,7 +104,7 @@ cfg.TRAINDATA = {
             "label_range": cfg.TASK["valid_range"].copy(),
             # [min_x, min_y, min_z, max_x, max_y, max_z] FIMU
         },
-        "@feature_map_size": None, # TBD
+        "@feature_map_size": None, # TBD in dataloader_builder.py
         "@classes_to_exclude": []
     }
 }
@@ -123,7 +123,7 @@ cfg.VALDATA = {
         "@training": False,
         "@augment_dict": None,
         "@filter_label_dict": dict(),
-        "@feature_map_size": None # TBD
+        "@feature_map_size": None # TBD in dataloader_builder.py
     }
 }
 
@@ -140,19 +140,20 @@ cfg.TESTDATA = {
         "@training": False,
         "@augment_dict": None,
         "@filter_label_dict": dict(),
-        "@feature_map_size": None # TBD
+        "@feature_map_size": None # TBD in dataloader_builder.py
     }
 }
 
 cfg.NETWORK = {
     "@classes_target": ["Car", "Pedestrian"],
     "@classes_source": None,
-    "@model_resume_dict": {
-        "ckpt_path": "saved_weights/incdet-dev-train-from-scratch-multi/IncDetMain-2500.tckpt",
-        "num_classes": 1,
-        "num_anchor_per_loc": 2,
-        "partially_load_params": []
-    },
+    "@model_resume_dict": None,
+    # {
+    #     "ckpt_path": "saved_weights/incdet-dev-train-from-scratch-multi/IncDetMain-4000.tckpt",
+    #     "num_classes": 2,
+    #     "num_anchor_per_loc": 4,
+    #     "partially_load_params": []
+    # },
     "@sub_model_resume_dict": None,
     "@voxel_encoder_dict": {
         "name": "SimpleVoxel",
@@ -184,7 +185,7 @@ cfg.NETWORK = {
         "@num_direction_bins": 2,
     },
     "@training_mode": "train_from_scratch",
-    "@is_training": None, #TBD
+    "@is_training": None, #TBD in main.py
     "@cls_loss_weight": 1.0,
     "@loc_loss_weight": 2.0,
     "@dir_loss_weight": 0.2,
