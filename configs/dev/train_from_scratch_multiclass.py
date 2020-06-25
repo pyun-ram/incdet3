@@ -17,7 +17,7 @@ cfg.TRAIN = {
     "optimizer_dict":{
         "type": "adam",
         "init_lr": 1e-3,
-        "weight_decay": 0.01,
+        "weight_decay": 0,
     },
     "lr_scheduler_dict":{
         "type": "StepLR",
@@ -186,13 +186,13 @@ cfg.NETWORK = {
     },
     "@training_mode": "train_from_scratch",
     "@is_training": None, #TBD in main.py
+    "@weight_decay_coef": 0.001,
     "@cls_loss_weight": 1.0,
     "@loc_loss_weight": 2.0,
     "@dir_loss_weight": 0.2,
     "@pos_cls_weight": 1.0,
     "@neg_cls_weight": 1.0,
     "@l2sp_alpha_coef": 1.0,
-    "@l2sp_beta_coef": 1.0,
     "@delta_coef": 1.0,
     "@distillation_loss_cls_coef": 1.0,
     "@distillation_loss_reg_coef": 1.0,
@@ -229,6 +229,7 @@ cfg.NETWORK = {
     "@distillation_mode": [],
     "@bool_oldclass_use_newanchor_for_cls": False,
     "@bool_biased_select_with_submodel": True,
+    "@bool_oldclassoldanchor_predicts_only": False,
     "@post_center_range": cfg.TASK["valid_range"].copy(),
     "@nms_score_thresholds": [0.3],
     "@nms_pre_max_sizes": [2000],

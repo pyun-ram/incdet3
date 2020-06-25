@@ -467,7 +467,7 @@ class Test_freeze_model_and_detach_variables(unittest.TestCase):
             }
             network = Network(**params).cuda()
             for name, param in network.named_parameters():
-                self.assertTrue(name, param.requires_grad)
+                self.assertTrue(param.requires_grad)
             data = load_pickle("./unit_tests/data/test_build_model_and_init_data.pkl")
             voxels = data["voxels"]
             num_points = data["num_points"]
@@ -521,8 +521,10 @@ class Test_freeze_model_and_detach_variables(unittest.TestCase):
                 "bool_oldclass_use_newanchor_for_cls": False,
             }
             network = Network(**params).cuda()
-            for name, param in network.named_parameters():
-                self.assertTrue(name, param.requires_grad)
+            for name, param in network._model.named_parameters():
+                self.assertTrue(param.requires_grad)
+            for name, param in network._sub_model.named_parameters():
+                self.assertFalse(param.requires_grad)
             data = load_pickle("./unit_tests/data/test_build_model_and_init_data.pkl")
             voxels = data["voxels"]
             num_points = data["num_points"]
@@ -607,7 +609,7 @@ class Test_freeze_model_and_detach_variables(unittest.TestCase):
                 }
                 network = Network(**params).cuda()
                 for name, param in network.named_parameters():
-                    self.assertTrue(name, param.requires_grad)
+                    self.assertTrue(param.requires_grad)
                 data = load_pickle("./unit_tests/data/test_build_model_and_init_data.pkl")
                 voxels = data["voxels"]
                 num_points = data["num_points"]
@@ -709,7 +711,7 @@ class Test_freeze_model_and_detach_variables(unittest.TestCase):
                 }
                 network = Network(**params).cuda()
                 for name, param in network.named_parameters():
-                    self.assertTrue(name, param.requires_grad)
+                    self.assertTrue(param.requires_grad)
                 data = load_pickle("./unit_tests/data/test_build_model_and_init_data.pkl")
                 voxels = data["voxels"]
                 num_points = data["num_points"]
@@ -812,8 +814,11 @@ class Test_freeze_model_and_detach_variables(unittest.TestCase):
                     "bool_oldclass_use_newanchor_for_cls": bool_oldclass_use_newanchor_for_cls,
                 }
                 network = Network(**params).cuda()
+                head_params = ["rpn.conv_cls", "rpn.conv_box", "rpn.conv_dir_cls"]
                 for name, param in network.named_parameters():
-                    self.assertTrue(name, param.requires_grad)
+                    is_head = any([itm in name for itm in head_params])
+                    if not is_head:
+                        self.assertFalse(param.requires_grad)
                 data = load_pickle("./unit_tests/data/test_build_model_and_init_data.pkl")
                 voxels = data["voxels"]
                 num_points = data["num_points"]
@@ -915,9 +920,12 @@ class Test_freeze_model_and_detach_variables(unittest.TestCase):
                     "is_training": True,
                     "bool_oldclass_use_newanchor_for_cls": bool_oldclass_use_newanchor_for_cls,
                 }
+                head_params = ["rpn.conv_cls", "rpn.conv_box", "rpn.conv_dir_cls"]
                 network = Network(**params).cuda()
                 for name, param in network.named_parameters():
-                    self.assertTrue(name, param.requires_grad)
+                    is_head = any([itm in name for itm in head_params])
+                    if not is_head:
+                        self.assertFalse(param.requires_grad)
                 data = load_pickle("./unit_tests/data/test_build_model_and_init_data.pkl")
                 voxels = data["voxels"]
                 num_points = data["num_points"]

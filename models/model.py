@@ -32,13 +32,14 @@ class Network(nn.Module):
         rpn_dict,
         training_mode,
         is_training,
+        weight_decay_coef=0.01,
         cls_loss_weight=1.0,
         loc_loss_weight=1.0,
         dir_loss_weight=1.0,
         pos_cls_weight=1.0,
         neg_cls_weight=1.0,
         l2sp_alpha_coef=1.0,
-        l2sp_beta_coef=1.0,
+        # l2sp_beta_coef=1.0,
         delta_coef=1.0,
         distillation_loss_cls_coef=1.0,
         distillation_loss_reg_coef=1.0,
@@ -48,6 +49,7 @@ class Network(nn.Module):
         distillation_mode=[],
         bool_oldclass_use_newanchor_for_cls=False,
         bool_biased_select_with_submodel=False,
+        bool_oldclassoldanchor_predicts_only=False,
         post_center_range=[],
         nms_score_thresholds=[],
         nms_pre_max_sizes=[],
@@ -81,13 +83,15 @@ class Network(nn.Module):
         self._pos_cls_weight = pos_cls_weight
         self._neg_cls_weight = neg_cls_weight
         self._loss_norm_type = "NormByNumPositives"
+        self._weight_decay_coef = weight_decay_coef
         self._l2sp_alpha_coef = l2sp_alpha_coef
-        self._l2sp_beta_coef = l2sp_beta_coef
+        # self._l2sp_beta_coef = l2sp_beta_coef
         self._delta_coef = delta_coef
         self._distillation_loss_cls_coef = distillation_loss_cls_coef
         self._distillation_loss_reg_coef = distillation_loss_reg_coef
         self._num_biased_select = num_biased_select
         self._bool_biased_select_with_submodel = bool_biased_select_with_submodel
+        self._bool_oldclassoldanchor_predicts_only = bool_oldclassoldanchor_predicts_only
         self._post_center_range = post_center_range
         self._nms_score_thresholds = nms_score_thresholds
         self._nms_pre_max_sizes = nms_pre_max_sizes
@@ -119,7 +123,9 @@ class Network(nn.Module):
 
         if self._training_mode in ["feature_extraction", "fine_tuning"]:
             self._num_old_classes = self._model_resume_dict["num_classes"]
+            self._num_new_classes = len(self._classes_target)
             self._num_old_anchor_per_loc = self._model_resume_dict["num_anchor_per_loc"]
+            self._num_new_anchor_per_loc = 2 * self._num_new_classes
             self._bool_oldclass_use_newanchor_for_cls = bool_oldclass_use_newanchor_for_cls
 
         if "l2sp" in self._distillation_mode or "distillation_loss" in self._distillation_mode:
@@ -471,6 +477,7 @@ class Network(nn.Module):
             est=dir_logits,
             gt=dir_targets,
             weights=weights["dir_weights"]*importance)*self._dir_loss_weight
+        loss_dict["loss_l2"] = self._compute_l2_loss()
         if "l2sp" in self._distillation_mode:
             loss_dict["loss_l2sp"] = self._compute_l2sp_loss()
         if "delta" in self._distillation_mode:
@@ -493,9 +500,64 @@ class Network(nn.Module):
             loss_dict["loss_distillation_loss_cls"] = loss_dl["loss_distillation_loss_cls"]
             loss_dict["loss_distillation_loss_reg"] = loss_dl["loss_distillation_loss_reg"]
         for k, v in loss_dict.items():
-            loss_dict[k] = v.sum() / batch_size_dev
+            if k in ["loss_l2", "loss_l2sp"]:
+                loss_dict[k] = v.sum()
+            else:
+                loss_dict[k] = v.sum() / batch_size_dev
         loss_dict["loss_total"] = sum(loss_dict.values())
         return loss_dict
+
+    def _compute_l2_loss(self):
+        loss = 0
+        # handle train_from_scratch since it does not have
+        # num_old_classes and num_old_anchor_per_loc
+        if self._training_mode == "train_from_scratch":
+            for name, param in self._model.named_parameters():
+                loss += 0.5 * torch.norm(param, 2) ** 2
+            return loss * self._weight_decay_coef
+        num_old_classes = self._num_old_classes
+        num_old_anchor_per_loc = self._num_old_anchor_per_loc
+        num_new_classes = self._num_new_classes
+        num_new_anchor_per_loc = self._num_new_anchor_per_loc
+        for name, param in self._model.named_parameters():
+            if not param.requires_grad:
+                continue
+            is_head = any([name.startswith(itm) for itm in Network.HEAD_NEAMES])
+            compute_param_shape = param.shape
+            if not is_head and "l2sp" not in self._distillation_mode:
+                loss += 0.5 * torch.norm(param, 2) ** 2
+            elif not is_head and "l2sp" in self._distillation_mode:
+                # l2sp will compute the weight decay according to old weights
+                loss += 0
+            elif name.startswith("rpn.conv_cls"):
+                compute_param = param.reshape(num_new_anchor_per_loc, num_new_classes, *compute_param_shape[1:])
+                compute_oldparam = (compute_param[:num_old_anchor_per_loc, :num_old_classes, ...]
+                    .reshape(-1, *compute_param_shape[1:]).contiguous())
+                # new classes
+                compute_newparam = (compute_param[:, num_old_classes:, ...]
+                    .reshape(-1, *compute_param_shape[1:]).contiguous())
+                # old classes with new anchors
+                compute_newparam_ = (compute_param[num_old_anchor_per_loc:, :num_old_classes, ...]
+                    .reshape(-1, *compute_param_shape[1:]).contiguous())
+                compute_newparam = torch.cat([compute_newparam, compute_newparam_], dim=0)
+                loss += 0.5 * torch.norm(compute_newparam, 2) ** 2
+            elif name.startswith("rpn.conv_box"):
+                compute_param = param.reshape(num_new_anchor_per_loc, 7, *compute_param_shape[1:])
+                compute_oldparam = (compute_param[:num_old_anchor_per_loc, ...]
+                    .reshape(-1, *compute_param_shape[1:]).contiguous())
+                compute_newparam = (compute_param[num_old_anchor_per_loc:, ...]
+                    .reshape(-1, *compute_param_shape[1:]).contiguous())
+                loss += 0.5 * torch.norm(compute_newparam, 2) ** 2
+            elif name.startswith("rpn.conv_dir_cls"):
+                compute_param = param.reshape(num_new_anchor_per_loc, 2, *compute_param_shape[1:])
+                compute_oldparam = (compute_param[:num_old_anchor_per_loc, ...]
+                    .reshape(-1, *compute_param_shape[1:]).contiguous())
+                compute_newparam = (compute_param[num_old_anchor_per_loc:, ...]
+                    .reshape(-1, *compute_param_shape[1:]).contiguous())
+                loss += 0.5 * torch.norm(compute_newparam, 2) ** 2
+            else:
+                raise NotImplementedError
+        return loss * self._weight_decay_coef
 
     @staticmethod
     def _prepare_loss_weights(labels,
@@ -595,7 +657,7 @@ class Network(nn.Module):
 
     def _compute_l2sp_loss(self):
         loss_alpha = 0
-        loss_beta = 0
+        # loss_beta = 0
         sub_model_weights = self._sub_model.state_dict()
         for name, param in self._model.named_parameters():
             is_head = any([name.startswith(headname) for headname in Network.HEAD_NEAMES])
@@ -632,8 +694,9 @@ class Network(nn.Module):
                 else:
                     raise NotImplementedError
                 loss_alpha += 0.5 * torch.norm(compute_oldparam - sub_model_weights[name].detach()) ** 2
-                loss_beta += 0.5 * torch.norm(compute_newparam) ** 2
-        return self._l2sp_alpha_coef * loss_alpha + self._l2sp_beta_coef * loss_beta
+                # loss_beta += 0.5 * torch.norm(compute_newparam) ** 2
+        # return self._l2sp_alpha_coef * loss_alpha + self._l2sp_beta_coef * loss_beta
+        return self._l2sp_alpha_coef * loss_alpha
 
     def _compute_delta_loss(self,
         channel_weights):
@@ -745,6 +808,14 @@ class Network(nn.Module):
         box_coder = ext_dict["box_coder"]
         num_class_with_bg = len(self._classes_target)
         batch_dir_preds = preds_dict["dir_cls_preds"]
+        if self._bool_oldclassoldanchor_predicts_only:
+            num_old_anchor_per_loc = self._num_old_anchor_per_loc
+            num_old_classes = self._num_old_classes
+            # deactivate new classes
+            batch_cls_preds[..., num_old_classes:] = -100
+            # deactivate new anchors of old classes
+            batch_cls_preds[:, num_old_anchor_per_loc:, ..., :num_old_classes] = -100
+
         batch_cls_preds = batch_cls_preds.view(batch_size, -1, num_class_with_bg)
         batch_box_preds = batch_box_preds.view(batch_size, -1, box_coder.code_size)
         batch_box_preds = box_coder.decode(batch_box_preds, batch_anchors)
