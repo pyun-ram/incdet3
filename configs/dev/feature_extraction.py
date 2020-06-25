@@ -7,13 +7,15 @@ cfg = edict()
 cfg.TASK = {
     "valid_range": [-35.2, -40, -1.5, 35.2, 40, 2.6],
     "total_training_steps": 2e3,
+    "continue_training_steps": 1e3
 }
 
 cfg.TRAIN = {
-    "train_iter": cfg.TASK["total_training_steps"],
+    "train_iter": (cfg.TASK["total_training_steps"] +
+                   cfg.TASK["continue_training_steps"]),
     "num_log_iter": 10,
-    "num_val_iter": 5e2,
-    "num_save_iter": 5e2,
+    "num_val_iter": 2e3,
+    "num_save_iter": 2e2,
     "optimizer_dict":{
         "type": "adam",
         "init_lr": 1e-3,
@@ -21,7 +23,8 @@ cfg.TRAIN = {
     },
     "lr_scheduler_dict":{
         "type": "StepLR",
-        "step_size": cfg.TASK["total_training_steps"] * 0.8,
+        "step_size": (cfg.TASK["total_training_steps"] +
+                      cfg.TASK["continue_training_steps"] * 0.8),
         "gamma": 0.1
     }
 }
@@ -36,7 +39,7 @@ cfg.VOXELIZER = {
 
 cfg.TARGETASSIGNER = {
     "type": "TaskAssignerV1",
-    "@classes": ["Car"],
+    "@classes": ["Car", "Pedestrian"],
     "@feature_map_sizes": None,
     "@positive_fraction": None,
     "@sample_size": 512,
@@ -54,6 +57,20 @@ cfg.TARGETASSIGNER = {
             "@rotations": [0, 1.57],
             "@match_threshold": 0.6,
             "@unmatch_threshold": 0.45,
+        },
+        "SimilarityCalculator": {
+            "type": "NearestIoUSimilarity"
+        }
+    },
+    "class_settings_pedestrian": {
+        "AnchorGenerator": {
+            "type": "AnchorGeneratorBEV",
+            "@class_name": "Pedestrian",
+            "@anchor_ranges": cfg.TASK["valid_range"].copy(), # TBD in modify_cfg(cfg)
+            "@sizes": [0.6, 0.8, 1.73], # wlh
+            "@rotations": [0, 1.57],
+            "@match_threshold": 0.35,
+            "@unmatch_threshold": 0.2,
         },
         "SimilarityCalculator": {
             "type": "NearestIoUSimilarity"
@@ -90,8 +107,8 @@ cfg.TRAINDATA = {
             "label_range": cfg.TASK["valid_range"].copy(),
             # [min_x, min_y, min_z, max_x, max_y, max_z] FIMU
         },
-        "@feature_map_size": None, # TBD
-        "@classes_to_exclude": []
+        "@feature_map_size": None, # TBD in dataloader_builder.py
+        "@classes_to_exclude": ["Car"]
     }
 }
 
@@ -109,7 +126,7 @@ cfg.VALDATA = {
         "@training": False,
         "@augment_dict": None,
         "@filter_label_dict": dict(),
-        "@feature_map_size": None # TBD
+        "@feature_map_size": None # TBD in dataloader_builder.py
     }
 }
 
@@ -126,14 +143,24 @@ cfg.TESTDATA = {
         "@training": False,
         "@augment_dict": None,
         "@filter_label_dict": dict(),
-        "@feature_map_size": None # TBD
+        "@feature_map_size": None # TBD in dataloader_builder.py
     }
 }
 
 cfg.NETWORK = {
-    "@classes_target": ["Car"],
+    "@classes_target": ["Car", "Pedestrian"],
     "@classes_source": None,
-    "@model_resume_dict": None,
+    "@model_resume_dict":
+    {
+        "ckpt_path": "saved_weights/incdet-tmp/IncDetMain-2000.tckpt",
+        "num_classes": 1,
+        "num_anchor_per_loc": 2,
+        "partially_load_params": [
+            "rpn.conv_cls.weight", "rpn.conv_cls.bias",
+            "rpn.conv_box.weight", "rpn.conv_box.bias",
+            "rpn.conv_dir_cls.weight", "rpn.conv_dir_cls.bias",
+        ]
+    },
     "@sub_model_resume_dict": None,
     "@voxel_encoder_dict": {
         "name": "SimpleVoxel",
@@ -164,8 +191,8 @@ cfg.NETWORK = {
         "@box_code_size": 7, # TBD
         "@num_direction_bins": 2,
     },
-    "@training_mode": "train_from_scratch",
-    "@is_training": None, #TBD
+    "@training_mode": "feature_extraction",
+    "@is_training": None, #TBD in main.py
     "@cls_loss_weight": 1.0,
     "@loc_loss_weight": 2.0,
     "@dir_loss_weight": 0.2,

@@ -176,10 +176,6 @@ def carlalabel2gt_dict(carlalabel,
         gt_classes = []
         gt_names = []
         gt_importance = []
-    if len(classes_to_exclude) > 0:
-        Logger.log_txt(bcolors.WARNING +
-            "carlalabel2gt_dict: The classes_to_exclude needs unit-test."+
-            bcolors.ENDC)
     gt_dict = {
         "gt_boxes": gt_boxes_FIMU,
         "gt_classes": gt_classes,
