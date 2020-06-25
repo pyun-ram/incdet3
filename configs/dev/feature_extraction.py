@@ -14,11 +14,11 @@ cfg.TRAIN = {
     "train_iter": (cfg.TASK["total_training_steps"] +
                    cfg.TASK["continue_training_steps"]),
     "num_log_iter": 10,
-    "num_val_iter": 2e3,
-    "num_save_iter": 2e2,
+    "num_val_iter": 5e2,
+    "num_save_iter": 5e2,
     "optimizer_dict":{
         "type": "adam",
-        "init_lr": 1e-3,
+        "init_lr": 1e-2,
         "weight_decay": 0.01,
     },
     "lr_scheduler_dict":{
