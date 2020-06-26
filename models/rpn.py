@@ -529,3 +529,190 @@ class RPNNoHead(RPNNoHeadBase):
             block.add(nn.ReLU())
 
         return block, planes
+
+class RPNBaseFeatExt(RPNNoHeadBase):
+    def __init__(self,
+                 use_norm=True,
+                 num_class=2,
+                 layer_nums=(3, 5, 5),
+                 layer_strides=(2, 2, 2),
+                 num_filters=(128, 128, 256),
+                 upsample_strides=(1, 2, 4),
+                 num_upsample_filters=(256, 256, 256),
+                 num_input_features=128,
+                 num_anchor_per_loc=2,
+                 encode_background_as_zeros=True,
+                 use_direction_classifier=True,
+                 use_groupnorm=False,
+                 num_groups=32,
+                 box_code_size=7,
+                 num_direction_bins=2,
+                 num_old_classes=1,
+                 num_new_classes=2,
+                 num_old_anchor_per_loc=2,
+                 num_new_anchor_per_loc=4,
+                 name='rpn'):
+        """upsample_strides support float: [0.25, 0.5, 1]
+        if upsample_strides < 1, conv2d will be used instead of convtranspose2d.
+        """
+        super(RPNBaseFeatExt, self).__init__(
+            use_norm=use_norm,
+            num_class=num_class,
+            layer_nums=layer_nums,
+            layer_strides=layer_strides,
+            num_filters=num_filters,
+            upsample_strides=upsample_strides,
+            num_upsample_filters=num_upsample_filters,
+            num_input_features=num_input_features,
+            num_anchor_per_loc=num_anchor_per_loc,
+            encode_background_as_zeros=encode_background_as_zeros,
+            use_direction_classifier=use_direction_classifier,
+            use_groupnorm=use_groupnorm,
+            num_groups=num_groups,
+            box_code_size=box_code_size,
+            num_direction_bins=num_direction_bins,
+            name=name)
+        self._num_anchor_per_loc = num_anchor_per_loc
+        self._num_direction_bins = num_direction_bins
+        self._num_class = num_class
+        self._use_direction_classifier = use_direction_classifier
+        self._box_code_size = box_code_size
+
+        if encode_background_as_zeros:
+            num_cls = num_anchor_per_loc * num_class
+        else:
+            num_cls = num_anchor_per_loc * (num_class + 1)
+        if len(num_upsample_filters) == 0:
+            final_num_filters = self._num_out_filters
+        else:
+            final_num_filters = sum(num_upsample_filters)
+        self.conv_cls = nn.Conv2d(final_num_filters, num_cls, 1)
+        self.conv_box = nn.Conv2d(final_num_filters,
+                                  num_anchor_per_loc * box_code_size, 1)
+        if use_direction_classifier:
+            self.conv_dir_cls = nn.Conv2d(
+                final_num_filters, num_anchor_per_loc * num_direction_bins, 1)
+
+        self._num_old_classes = num_old_classes
+        self._num_old_anchor_per_loc = num_old_anchor_per_loc
+        self._num_new_classes = num_new_classes
+        self._num_new_anchor_per_loc = num_new_anchor_per_loc
+
+        self.featext_conv_1 = nn.Conv2d(128, 128, 1)
+        self.featext_bn_1 = nn.BatchNorm2d(128, eps=1e-3, momentum=0.01)
+        self.featext_conv_2 = nn.Conv2d(128, 128, 1)
+        self.featext_bn_2 = nn.BatchNorm2d(128, eps=1e-3, momentum=0.01)
+        self.featext_conv_cls = nn.Conv2d(128, self._num_class * self._num_anchor_per_loc, 1)
+        self.featext_conv_box = nn.Conv2d(128, self._num_anchor_per_loc * self._box_code_size, 1)
+        self.featext_relu = nn.ReLU()
+        if use_direction_classifier:
+            self.featext_conv_dir_cls = nn.Conv2d(
+                128, self._num_anchor_per_loc * self._num_direction_bins, 1)
+
+    def forward(self, x):
+        res = super().forward(x)
+        x = res["out"]
+        box_preds = self.conv_box(x)
+        cls_preds = self.conv_cls(x)
+
+        # [N, C, y(H), x(W)]
+        C, H, W = box_preds.shape[1:]
+        box_preds = box_preds.view(-1, self._num_anchor_per_loc,
+                                   self._box_code_size, H, W).permute(
+                                       0, 1, 3, 4, 2).contiguous()
+        cls_preds = cls_preds.view(-1, self._num_anchor_per_loc,
+                                   self._num_class, H, W).permute(
+                                       0, 1, 3, 4, 2).contiguous()
+        # box_preds = box_preds.permute(0, 2, 3, 1).contiguous()
+        # cls_preds = cls_preds.permute(0, 2, 3, 1).contiguous()
+
+        ret_dict = {
+            "box_preds": box_preds,
+            "cls_preds": cls_preds,
+        }
+        if self._use_direction_classifier:
+            dir_cls_preds = self.conv_dir_cls(x)
+            dir_cls_preds = dir_cls_preds.view(
+                -1, self._num_anchor_per_loc, self._num_direction_bins, H,
+                W).permute(0, 1, 3, 4, 2).contiguous()
+            # dir_cls_preds = dir_cls_preds.permute(0, 2, 3, 1).contiguous()
+            ret_dict["dir_cls_preds"] = dir_cls_preds
+
+        featext_x = self.featext_relu(self.featext_bn_1(self.featext_conv_1(x)))
+        featext_x = self.featext_relu(self.featext_bn_2(self.featext_conv_2(x)))
+        featext_cls_preds = self.featext_conv_cls(featext_x)
+        featext_box_preds = self.featext_conv_box(featext_x)
+        featext_box_preds = featext_box_preds.view(-1, self._num_anchor_per_loc,
+                                   self._box_code_size, H, W).permute(
+                                       0, 1, 3, 4, 2).contiguous()
+        featext_cls_preds = featext_cls_preds.view(-1, self._num_anchor_per_loc,
+                                   self._num_class, H, W).permute(
+                                       0, 1, 3, 4, 2).contiguous()
+        if self._use_direction_classifier:
+            featext_dir_cls_preds = self.featext_conv_dir_cls(featext_x)
+            featext_dir_cls_preds = featext_dir_cls_preds.view(
+                -1, self._num_anchor_per_loc, self._num_direction_bins, H,
+                W).permute(0, 1, 3, 4, 2).contiguous()
+        num_old_classes = self._num_old_classes
+        num_old_anchor_per_loc = self._num_old_anchor_per_loc
+        # cls_preds [batch_size, num_new_anchor_per_loc, ..., num_new_classes]
+        old_cls_preds = ret_dict["cls_preds"][:, :num_old_anchor_per_loc, ..., :num_old_classes]
+        new_cls_preds1 = featext_cls_preds[:, num_old_anchor_per_loc:, ..., :num_old_classes]
+        new_cls_preds = torch.cat([old_cls_preds, new_cls_preds1], dim=1)
+        new_cls_preds2 = featext_cls_preds[..., num_old_classes:]
+        new_cls_preds = torch.cat([new_cls_preds, new_cls_preds2], dim=-1)
+        ret_dict["cls_preds"] = new_cls_preds
+        # box_preds [batch_size, num_new_anchor_per_loc, ...]
+        old_box_preds = ret_dict["box_preds"][:, :num_old_anchor_per_loc, ...]
+        new_box_preds = featext_box_preds[:, num_old_anchor_per_loc:, ...]
+        new_box_preds = torch.cat([old_box_preds, new_box_preds], dim=1)
+        ret_dict["box_preds"] = new_box_preds
+        if self._use_direction_classifier:
+            # box_preds [batch_size, num_new_anchor_per_loc, ...]
+            old_dir_preds = ret_dict["dir_cls_preds"][:, :num_old_anchor_per_loc, ...]
+            new_dir_preds = featext_dir_cls_preds[:, num_old_anchor_per_loc:, ...]
+            new_dir_preds = torch.cat([old_dir_preds, new_dir_preds], dim=1)
+            ret_dict["dir_cls_preds"] = new_dir_preds
+        return ret_dict
+
+@register_rpn
+class ResNetRPNFeatExt(RPNBaseFeatExt):
+    '''
+    This is a direct copy of ResNetRPN but inherit from RPNBaseFeatExt.
+    '''
+    def __init__(self, *args, **kw):
+        self.inplanes = -1
+        super(ResNetRPNFeatExt, self).__init__(*args, **kw)
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(
+                    m.weight, mode='fan_out', nonlinearity='relu')
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+
+        # if zero_init_residual:
+        for m in self.modules():
+            if isinstance(m, resnet.Bottleneck):
+                nn.init.constant_(m.bn3.weight, 0)
+            elif isinstance(m, resnet.BasicBlock):
+                nn.init.constant_(m.bn2.weight, 0)
+
+    def _make_layer(self, inplanes, planes, num_blocks, stride=1):
+        if self.inplanes == -1:
+            self.inplanes = self._num_input_features
+        block = resnet.BasicBlock
+        downsample = None
+        if stride != 1 or self.inplanes != planes * block.expansion:
+            downsample = nn.Sequential(
+                conv1x1(self.inplanes, planes * block.expansion, stride),
+                nn.BatchNorm2d(planes * block.expansion),
+            )
+
+        layers = []
+        layers.append(block(self.inplanes, planes, stride, downsample))
+        self.inplanes = planes * block.expansion
+        for _ in range(1, num_blocks):
+            layers.append(block(self.inplanes, planes))
+
+        return nn.Sequential(*layers), self.inplanes

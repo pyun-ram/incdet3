@@ -790,7 +790,7 @@ class Test_freeze_model_and_detach_variables(unittest.TestCase):
         num_new_class = 2
         num_old_class = 1
         '''
-        for rpn_name in ["RPNV2", "ResNetRPN"]:
+        for rpn_name in ["ResNetRPNFeatExt"]:
             for bool_oldclass_use_newanchor_for_cls in [True, False]:
                 network_cfg = Test_freeze_model_and_detach_variables.network_cfg_template.copy()
                 network_cfg["RPN"]["name"] = rpn_name
@@ -814,11 +814,11 @@ class Test_freeze_model_and_detach_variables(unittest.TestCase):
                     "bool_oldclass_use_newanchor_for_cls": bool_oldclass_use_newanchor_for_cls,
                 }
                 network = Network(**params).cuda()
-                head_params = ["rpn.conv_cls", "rpn.conv_box", "rpn.conv_dir_cls"]
-                for name, param in network.named_parameters():
-                    is_head = any([itm in name for itm in head_params])
-                    if not is_head:
+                for name, param in network._model.named_parameters():
+                    if not name.startswith("rpn.featext"):
                         self.assertFalse(param.requires_grad)
+                    else:
+                        self.assertTrue(param.requires_grad)
                 data = load_pickle("./unit_tests/data/test_build_model_and_init_data.pkl")
                 voxels = data["voxels"]
                 num_points = data["num_points"]
@@ -845,11 +845,11 @@ class Test_freeze_model_and_detach_variables(unittest.TestCase):
                 print_zero_grad = lambda param: (param.grad == 0).nonzero()
                 conv_cls_idx = [0,2] if bool_oldclass_use_newanchor_for_cls else [0,2,4,6]
                 # conv_cls
-                tmp = print_zero_grad(network._model.rpn.conv_cls.bias)
+                tmp = print_zero_grad(network._model.rpn.featext_conv_cls.bias)
                 tmp = tmp == torch.Tensor(conv_cls_idx).reshape(-1,1).cuda()
                 self.assertTrue(torch.all(tmp))
 
-                tmp = print_zero_grad(network._model.rpn.conv_cls.weight)
+                tmp = print_zero_grad(network._model.rpn.featext_conv_cls.weight)
                 y, x = np.meshgrid([i for i in range(128)], conv_cls_idx)
                 gt = np.asarray([[x_, y_] for x_, y_ in zip(x.flatten(), y.flatten())])
                 gt = gt.reshape(x.shape[0]*x.shape[1], -1)
@@ -859,11 +859,11 @@ class Test_freeze_model_and_detach_variables(unittest.TestCase):
                 self.assertTrue(torch.all(tmp))
 
                 # conv_box
-                tmp = print_zero_grad(network._model.rpn.conv_box.bias)
+                tmp = print_zero_grad(network._model.rpn.featext_conv_box.bias)
                 tmp = tmp == torch.Tensor(range(7*2)).reshape(-1,1).cuda()
                 self.assertTrue(torch.all(tmp))
 
-                tmp = print_zero_grad(network._model.rpn.conv_box.weight)
+                tmp = print_zero_grad(network._model.rpn.featext_conv_box.weight)
                 y, x = np.meshgrid([i for i in range(128)], range(7*2))
                 gt = np.asarray([[x_, y_] for x_, y_ in zip(x.flatten(), y.flatten())])
                 gt = gt.reshape(x.shape[0]*x.shape[1], -1)
@@ -873,11 +873,11 @@ class Test_freeze_model_and_detach_variables(unittest.TestCase):
                 self.assertTrue(torch.all(tmp))
 
                 # conv_dir_cls
-                tmp = print_zero_grad(network._model.rpn.conv_dir_cls.bias)
+                tmp = print_zero_grad(network._model.rpn.featext_conv_dir_cls.bias)
                 tmp = tmp == torch.Tensor(range(2*2)).reshape(-1,1).cuda()
                 self.assertTrue(torch.all(tmp))
 
-                tmp = print_zero_grad(network._model.rpn.conv_dir_cls.weight)
+                tmp = print_zero_grad(network._model.rpn.featext_conv_dir_cls.weight)
                 y, x = np.meshgrid([i for i in range(128)], range(2*2))
                 gt = np.asarray([[x_, y_] for x_, y_ in zip(x.flatten(), y.flatten())])
                 gt = gt.reshape(x.shape[0]*x.shape[1], -1)
@@ -897,7 +897,7 @@ class Test_freeze_model_and_detach_variables(unittest.TestCase):
         num_new_class = 3
         num_old_class = 2
         '''
-        for rpn_name in ["RPNV2", "ResNetRPN"]:
+        for rpn_name in ["ResNetRPNFeatExt"]:
             for bool_oldclass_use_newanchor_for_cls in [True, False]:
                 network_cfg = Test_freeze_model_and_detach_variables.network_cfg_template.copy()
                 network_cfg["RPN"]["name"] = rpn_name
@@ -922,10 +922,11 @@ class Test_freeze_model_and_detach_variables(unittest.TestCase):
                 }
                 head_params = ["rpn.conv_cls", "rpn.conv_box", "rpn.conv_dir_cls"]
                 network = Network(**params).cuda()
-                for name, param in network.named_parameters():
-                    is_head = any([itm in name for itm in head_params])
-                    if not is_head:
+                for name, param in network._model.named_parameters():
+                    if not name.startswith("rpn.featext"):
                         self.assertFalse(param.requires_grad)
+                    else:
+                        self.assertTrue(param.requires_grad)
                 data = load_pickle("./unit_tests/data/test_build_model_and_init_data.pkl")
                 voxels = data["voxels"]
                 num_points = data["num_points"]
@@ -952,11 +953,11 @@ class Test_freeze_model_and_detach_variables(unittest.TestCase):
                 print_zero_grad = lambda param: (param.grad == 0).nonzero()
                 conv_cls_idx = [0,1,3,4,6,7,9,10] if bool_oldclass_use_newanchor_for_cls else [0,1,3,4,6,7,9,10,12,13,15,16]
                 # conv_cls
-                tmp = print_zero_grad(network._model.rpn.conv_cls.bias)
+                tmp = print_zero_grad(network._model.rpn.featext_conv_cls.bias)
                 tmp = tmp == torch.Tensor(conv_cls_idx).reshape(-1,1).cuda()
                 self.assertTrue(torch.all(tmp))
 
-                tmp = print_zero_grad(network._model.rpn.conv_cls.weight)
+                tmp = print_zero_grad(network._model.rpn.featext_conv_cls.weight)
                 y, x = np.meshgrid([i for i in range(128)], conv_cls_idx)
                 gt = np.asarray([[x_, y_] for x_, y_ in zip(x.flatten(), y.flatten())])
                 gt = gt.reshape(x.shape[0]*x.shape[1], -1)
@@ -966,11 +967,11 @@ class Test_freeze_model_and_detach_variables(unittest.TestCase):
                 self.assertTrue(torch.all(tmp))
 
                 # conv_box
-                tmp = print_zero_grad(network._model.rpn.conv_box.bias)
+                tmp = print_zero_grad(network._model.rpn.featext_conv_box.bias)
                 tmp = tmp == torch.Tensor(range(7*4)).reshape(-1,1).cuda()
                 self.assertTrue(torch.all(tmp))
 
-                tmp = print_zero_grad(network._model.rpn.conv_box.weight)
+                tmp = print_zero_grad(network._model.rpn.featext_conv_box.weight)
                 y, x = np.meshgrid([i for i in range(128)], range(7*4))
                 gt = np.asarray([[x_, y_] for x_, y_ in zip(x.flatten(), y.flatten())])
                 gt = gt.reshape(x.shape[0]*x.shape[1], -1)
@@ -980,11 +981,11 @@ class Test_freeze_model_and_detach_variables(unittest.TestCase):
                 self.assertTrue(torch.all(tmp))
 
                 # conv_dir_cls
-                tmp = print_zero_grad(network._model.rpn.conv_dir_cls.bias)
+                tmp = print_zero_grad(network._model.rpn.featext_conv_dir_cls.bias)
                 tmp = tmp == torch.Tensor(range(2*4)).reshape(-1,1).cuda()
                 self.assertTrue(torch.all(tmp))
 
-                tmp = print_zero_grad(network._model.rpn.conv_dir_cls.weight)
+                tmp = print_zero_grad(network._model.rpn.featext_conv_dir_cls.weight)
                 y, x = np.meshgrid([i for i in range(128)], range(2*4))
                 gt = np.asarray([[x_, y_] for x_, y_ in zip(x.flatten(), y.flatten())])
                 gt = gt.reshape(x.shape[0]*x.shape[1], -1)

@@ -121,6 +121,7 @@ class Network(nn.Module):
                     for k, v in loss_dict["DistillationRegressionLoss"].items() if is_param(k)}
                 self._distillation_loss_reg_ftor = get_loss_class(loss_dict["DistillationRegressionLoss"]["name"])(**param)
 
+        self._bool_oldclass_use_newanchor_for_cls = True
         if self._training_mode in ["feature_extraction", "fine_tuning"]:
             self._num_old_classes = self._model_resume_dict["num_classes"]
             self._num_new_classes = len(self._classes_target)
@@ -242,10 +243,12 @@ class Network(nn.Module):
         elif training_mode == "feature_extraction":
             for name, param in self._model.named_parameters():
                 if "rpn.conv_cls" in name:
-                    param.requires_grad = True
+                    param.requires_grad = False
                 elif "rpn.conv_box" in name:
-                    param.requires_grad = True
+                    param.requires_grad = False
                 elif "rpn.conv_dir_cls" in name:
+                    param.requires_grad = False
+                elif "rpn.featext" in name:
                     param.requires_grad = True
                 else:
                     param.requires_grad = False
@@ -320,7 +323,7 @@ class Network(nn.Module):
         rpn_name = rpn_cfg["name"]
         rpn_cfg["@num_class"] = len(classes)
         rpn_cfg["@num_anchor_per_loc"] =  len(classes) * 2 # two anchors for each class
-        if rpn_name in ["RPNV2", "ResNetRPN"]:
+        if rpn_name in ["RPNV2", "ResNetRPN", "ResNetRPNFeatExt"]:
             param = {proc_param(k): v
                 for k, v in rpn_cfg.items() if is_param(k)}
             rpn = get_rpn_class(rpn_name)(**param)
@@ -397,6 +400,8 @@ class Network(nn.Module):
         old_num_classes = resume_dict["num_classes"]
         old_num_anchor_per_loc = resume_dict["num_anchor_per_loc"]
         partially_load_params = resume_dict["partially_load_params"]
+        ignore_params = (resume_dict["ignore_params"]
+            if "ignore_params" in resume_dict.keys() else [])
         parse_cls_conv_layer = {
             2: {"num_classes": 1, "num_anchor_per_loc": 2},
             8: {"num_classes": 2, "num_anchor_per_loc": 4},
@@ -415,6 +420,10 @@ class Network(nn.Module):
         new_num_classes = parse_cls_conv_layer[num_conv_cls_bias]["num_classes"]
         new_num_anchor_per_loc = parse_cls_conv_layer[num_conv_cls_bias]["num_anchor_per_loc"]
         for key in new_sd.keys():
+            if key in ignore_params:
+                new_sd[key] = new_sd[key]
+                Logger.log_txt("Ignore loading {}.".format(key))
+                continue
             if key not in partially_load_params:
                 new_sd[key] = old_sd[key]
             else:
@@ -526,6 +535,42 @@ class Network(nn.Module):
         num_old_anchor_per_loc = self._num_old_anchor_per_loc
         num_new_classes = self._num_new_classes
         num_new_anchor_per_loc = self._num_new_anchor_per_loc
+        # handle feature_extraction since it have extended layers
+        if self._training_mode == "feature_extraction":
+            for name, param in self._model.named_parameters():
+                compute_param_shape = param.shape
+                if not param.requires_grad:
+                    continue
+                elif name.startswith("rpn.featext_conv_cls"):
+                    compute_param = param.reshape(num_new_anchor_per_loc, num_new_classes, *compute_param_shape[1:])
+                    compute_oldparam = (compute_param[:num_old_anchor_per_loc, :num_old_classes, ...]
+                        .reshape(-1, *compute_param_shape[1:]).contiguous())
+                    # new classes
+                    compute_newparam = (compute_param[:, num_old_classes:, ...]
+                        .reshape(-1, *compute_param_shape[1:]).contiguous())
+                    # old classes with new anchors
+                    compute_newparam_ = (compute_param[num_old_anchor_per_loc:, :num_old_classes, ...]
+                        .reshape(-1, *compute_param_shape[1:]).contiguous())
+                    compute_newparam = torch.cat([compute_newparam, compute_newparam_], dim=0)
+                    loss += 0.5 * torch.norm(compute_newparam, 2) ** 2
+                elif name.startswith("rpn.featext_conv_box"):
+                    compute_param = param.reshape(num_new_anchor_per_loc, 7, *compute_param_shape[1:])
+                    compute_oldparam = (compute_param[:num_old_anchor_per_loc, ...]
+                        .reshape(-1, *compute_param_shape[1:]).contiguous())
+                    compute_newparam = (compute_param[num_old_anchor_per_loc:, ...]
+                        .reshape(-1, *compute_param_shape[1:]).contiguous())
+                    loss += 0.5 * torch.norm(compute_newparam, 2) ** 2
+                elif name.startswith("rpn.featext_conv_dir_cls"):
+                    compute_param = param.reshape(num_new_anchor_per_loc, 2, *compute_param_shape[1:])
+                    compute_oldparam = (compute_param[:num_old_anchor_per_loc, ...]
+                        .reshape(-1, *compute_param_shape[1:]).contiguous())
+                    compute_newparam = (compute_param[num_old_anchor_per_loc:, ...]
+                        .reshape(-1, *compute_param_shape[1:]).contiguous())
+                    loss += 0.5 * torch.norm(compute_newparam, 2) ** 2
+                else:
+                    loss += 0.5 * torch.norm(param, 2) ** 2
+            return loss * self._weight_decay_coef
+        # handle joint_training, fine_tuning, lwf
         for name, param in self._model.named_parameters():
             if not param.requires_grad:
                 continue

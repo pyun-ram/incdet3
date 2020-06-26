@@ -618,7 +618,7 @@ class Test_compute_l2_loss(unittest.TestCase):
         hc_loss = hc_loss * hc_weight_decay_coef
         self.assertTrue(torch.all(hc_loss == loss))
 
-    def test_l2_loss_has_l2sp(self):
+    def test_l2_loss_feature_extraction(self):
         '''
         test case: not train_from_scratch (has_l2sp)
         '''
@@ -657,7 +657,7 @@ class Test_compute_l2_loss(unittest.TestCase):
             },
         }
         name_template = "IncDetTest"
-        rpn_name = "ResNetRPN"
+        rpn_name = "ResNetRPNFeatExt"
         network_cfg = network_cfg_template.copy()
         network_cfg["RPN"]["name"] = rpn_name
         network_cfg["RPN"]["@num_class"] = 3
@@ -669,14 +669,22 @@ class Test_compute_l2_loss(unittest.TestCase):
                 "ckpt_path": "./unit_tests/data/test_build_model_and_init_weight_ResNetRPN_3.tckpt",
                 "num_classes": 3,
                 "num_anchor_per_loc": 6,
-                "partially_load_params": []
+                "partially_load_params": [],
+                "ignore_params": [
+                    "rpn.featext_conv_1.weight", "rpn.featext_conv_1.bias",
+                    "rpn.featext_bn_1.weight", "rpn.featext_bn_1.bias",
+                    "rpn.featext_bn_1.running_mean", "rpn.featext_bn_1.running_var",
+                    "rpn.featext_bn_1.num_batches_tracked",
+                    "rpn.featext_conv_2.weight", "rpn.featext_conv_2.bias",
+                    "rpn.featext_bn_2.weight", "rpn.featext_bn_2.bias",
+                    "rpn.featext_bn_2.running_mean", "rpn.featext_bn_2.running_var",
+                    "rpn.featext_bn_2.num_batches_tracked",
+                    "rpn.featext_conv_cls.weight", "rpn.featext_conv_cls.bias",
+                    "rpn.featext_conv_box.weight", "rpn.featext_conv_box.bias",
+                    "rpn.featext_conv_dir_cls.weight", "rpn.featext_conv_dir_cls.bias",
+                ]
             },
-            "sub_model_resume_dict": {
-                "ckpt_path": "./unit_tests/data/test_build_model_and_init_weight_ResNetRPN_2.tckpt",
-                "num_classes": 2,
-                "num_anchor_per_loc": 4,
-                "partially_load_params": []
-            },
+            "sub_model_resume_dict": None,
             "voxel_encoder_dict": network_cfg["VoxelEncoder"],
             "middle_layer_dict": network_cfg["MiddleLayer"],
             "rpn_dict": network_cfg["RPN"],
@@ -719,7 +727,7 @@ class Test_compute_l2_loss(unittest.TestCase):
                 },
             },
             "hook_layers": ["rpn.deblocks.0.2"],
-            "distillation_mode": ["l2sp", "delta", "distillation_loss"],
+            "distillation_mode": [],
             "bool_oldclass_use_newanchor_for_cls": False,
             "bool_biased_select_with_submodel": False
         }
@@ -734,7 +742,7 @@ class Test_compute_l2_loss(unittest.TestCase):
         num_new_anchor_per_loc = self.network._num_new_anchor_per_loc
         for name, param in self.network._model.named_parameters():
             compute_param_shape = param.shape
-            if name.startswith("rpn.conv_cls"):
+            if name.startswith("rpn.featext_conv_cls"):
                 compute_param = param.reshape(num_new_anchor_per_loc, num_new_classes, *compute_param_shape[1:])
                 compute_oldparam = (compute_param[:num_old_anchor_per_loc, :num_old_classes, ...]
                     .reshape(-1, *compute_param_shape[1:]).contiguous())
@@ -745,23 +753,169 @@ class Test_compute_l2_loss(unittest.TestCase):
                 compute_newparam_ = (compute_param[num_old_anchor_per_loc:, :num_old_classes, ...]
                     .reshape(-1, *compute_param_shape[1:]).contiguous())
                 compute_newparam = torch.cat([compute_newparam, compute_newparam_], dim=0)
-            elif name.startswith("rpn.conv_box"):
+            elif name.startswith("rpn.featext_conv_box"):
                 compute_param = param.reshape(num_new_anchor_per_loc, 7, *compute_param_shape[1:])
                 compute_oldparam = (compute_param[:num_old_anchor_per_loc, ...]
                     .reshape(-1, *compute_param_shape[1:]).contiguous())
                 compute_newparam = (compute_param[num_old_anchor_per_loc:, ...]
                     .reshape(-1, *compute_param_shape[1:]).contiguous())
-            elif name.startswith("rpn.conv_dir_cls"):
+            elif name.startswith("rpn.featext_conv_dir_cls"):
                 compute_param = param.reshape(num_new_anchor_per_loc, 2, *compute_param_shape[1:])
                 compute_oldparam = (compute_param[:num_old_anchor_per_loc, ...]
                     .reshape(-1, *compute_param_shape[1:]).contiguous())
                 compute_newparam = (compute_param[num_old_anchor_per_loc:, ...]
                     .reshape(-1, *compute_param_shape[1:]).contiguous())
             else:
-                continue
+                compute_newparam = param if param.requires_grad else torch.zeros(0)
             hc_loss += 0.5 * torch.norm(compute_newparam, 2) ** 2
         hc_loss = hc_loss * hc_weight_decay_coef
         self.assertTrue(torch.all(hc_loss == loss))
+
+    def test_l2_loss_has_l2sp(self):
+        '''
+        test case: not train_from_scratch (has_l2sp)
+        '''
+        '''
+        test case: train_from_scratch
+        '''
+        for training_mode in ["joint_training", "fine_tuning", "lwf"]:
+            network_cfg_template =  {
+                "VoxelEncoder": {
+                    "name": "SimpleVoxel",
+                    "@num_input_features": 3,
+                },
+                "MiddleLayer":{
+                    "name": "SpMiddleFHD",
+                    "@use_norm": True,
+                    "@num_input_features": 3,
+                    "@output_shape": [1, 41, 1600, 1408, 16], #TBD
+                    "downsample_factor": 8
+                },
+                "RPN":{
+                    "name": "ResNetRPN",
+                    "@use_norm": True,
+                    "@num_class": None, # TBD
+                    "@layer_nums": [5],
+                    "@layer_strides": [1],
+                    "@num_filters": [128],
+                    "@upsample_strides": [1],
+                    "@num_upsample_filters": [128],
+                    "@num_input_features": 128,
+                    "@num_anchor_per_loc": None, # TBD
+                    "@encode_background_as_zeros": True,
+                    "@use_direction_classifier": True,
+                    "@use_groupnorm": False,
+                    "@num_groups": 0,
+                    "@box_code_size": 7, # TBD
+                    "@num_direction_bins": 2,
+                },
+            }
+            name_template = "IncDetTest"
+            rpn_name = "ResNetRPN"
+            network_cfg = network_cfg_template.copy()
+            network_cfg["RPN"]["name"] = rpn_name
+            network_cfg["RPN"]["@num_class"] = 3
+            network_cfg["RPN"]["@num_anchor_per_loc"] = 6
+            self.params = {
+                "classes_target": ["class1", "class2", "class3"],
+                "classes_source": ["class1", "class2"],
+                "model_resume_dict": {
+                    "ckpt_path": "./unit_tests/data/test_build_model_and_init_weight_ResNetRPN_3.tckpt",
+                    "num_classes": 3,
+                    "num_anchor_per_loc": 6,
+                    "partially_load_params": []
+                },
+                "sub_model_resume_dict": {
+                    "ckpt_path": "./unit_tests/data/test_build_model_and_init_weight_ResNetRPN_2.tckpt",
+                    "num_classes": 2,
+                    "num_anchor_per_loc": 4,
+                    "partially_load_params": []
+                },
+                "voxel_encoder_dict": network_cfg["VoxelEncoder"],
+                "middle_layer_dict": network_cfg["MiddleLayer"],
+                "rpn_dict": network_cfg["RPN"],
+                "training_mode": training_mode,
+                "is_training": True,
+                "pos_cls_weight": 1.0,
+                "neg_cls_weight": 1.0,
+                "l2sp_alpha_coef": 2.0,
+                "weight_decay_coef": 0.01,
+                "delta_coef": 4.0,
+                "distillation_loss_cls_coef": 1.0,
+                "distillation_loss_reg_coef": 1.0,
+                "num_biased_select": 2,
+                "loss_dict": {
+                    "ClassificationLoss":{
+                        "name": "SigmoidFocalClassificationLoss",
+                        "@alpha": 0.25,
+                        "@gamma": 2.0,
+                    },
+                    "LocalizationLoss":{
+                        "name": "WeightedSmoothL1LocalizationLoss",
+                        "@sigma": 3.0,
+                        "@code_weights": [2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+                        "@codewise": True,
+                    },
+                    "DirectionLoss":{
+                        "name": "WeightedSoftmaxClassificationLoss",
+                    },
+                    "DistillationClassificationLoss":{
+                        "name": "WeightedSmoothL1LocalizationLoss",
+                        "@sigma": 1.3,
+                        "@code_weights": [4.0] * 2,
+                        "@codewise": True,
+                    },
+                    "DistillationRegressionLoss":{
+                        "name": "WeightedSmoothL1LocalizationLoss",
+                        "@sigma": 3.0,
+                        "@code_weights": [3.0] * 7,
+                        "@codewise": True,
+                    },
+                },
+                "hook_layers": ["rpn.deblocks.0.2"],
+                "distillation_mode": ["l2sp", "delta", "distillation_loss"],
+                "bool_oldclass_use_newanchor_for_cls": False,
+                "bool_biased_select_with_submodel": False
+            }
+            self.network = Network(**self.params).cuda()
+            self.data = load_pickle("./unit_tests/data/test_build_model_and_init_data.pkl")
+            loss = self.network._compute_l2_loss()
+            hc_loss = 0
+            hc_weight_decay_coef = 0.01
+            num_old_classes = self.network._num_old_classes
+            num_old_anchor_per_loc = self.network._num_old_anchor_per_loc
+            num_new_classes = self.network._num_new_classes
+            num_new_anchor_per_loc = self.network._num_new_anchor_per_loc
+            for name, param in self.network._model.named_parameters():
+                compute_param_shape = param.shape
+                if name.startswith("rpn.conv_cls"):
+                    compute_param = param.reshape(num_new_anchor_per_loc, num_new_classes, *compute_param_shape[1:])
+                    compute_oldparam = (compute_param[:num_old_anchor_per_loc, :num_old_classes, ...]
+                        .reshape(-1, *compute_param_shape[1:]).contiguous())
+                    # new classes
+                    compute_newparam = (compute_param[:, num_old_classes:, ...]
+                        .reshape(-1, *compute_param_shape[1:]).contiguous())
+                    # old classes with new anchors
+                    compute_newparam_ = (compute_param[num_old_anchor_per_loc:, :num_old_classes, ...]
+                        .reshape(-1, *compute_param_shape[1:]).contiguous())
+                    compute_newparam = torch.cat([compute_newparam, compute_newparam_], dim=0)
+                elif name.startswith("rpn.conv_box"):
+                    compute_param = param.reshape(num_new_anchor_per_loc, 7, *compute_param_shape[1:])
+                    compute_oldparam = (compute_param[:num_old_anchor_per_loc, ...]
+                        .reshape(-1, *compute_param_shape[1:]).contiguous())
+                    compute_newparam = (compute_param[num_old_anchor_per_loc:, ...]
+                        .reshape(-1, *compute_param_shape[1:]).contiguous())
+                elif name.startswith("rpn.conv_dir_cls"):
+                    compute_param = param.reshape(num_new_anchor_per_loc, 2, *compute_param_shape[1:])
+                    compute_oldparam = (compute_param[:num_old_anchor_per_loc, ...]
+                        .reshape(-1, *compute_param_shape[1:]).contiguous())
+                    compute_newparam = (compute_param[num_old_anchor_per_loc:, ...]
+                        .reshape(-1, *compute_param_shape[1:]).contiguous())
+                else:
+                    continue
+                hc_loss += 0.5 * torch.norm(compute_newparam, 2) ** 2
+            hc_loss = hc_loss * hc_weight_decay_coef
+            self.assertTrue(torch.all(hc_loss == loss))
 
 
     def test_l2_loss_not_have_l2sp(self):
@@ -771,7 +925,7 @@ class Test_compute_l2_loss(unittest.TestCase):
         '''
         test case: train_from_scratch
         '''
-        for training_scheme in ["feature_extraction", "joint_training", "lwf", "fine_tuning"]:
+        for training_scheme in ["joint_training", "lwf", "fine_tuning"]:
             network_cfg_template =  {
                 "VoxelEncoder": {
                     "name": "SimpleVoxel",

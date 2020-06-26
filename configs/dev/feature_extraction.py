@@ -81,8 +81,8 @@ cfg.TARGETASSIGNER = {
 cfg.TRAINDATA = {
     "dataset": "carla", # carla
     "training": True,
-    "batch_size": 5,
-    "num_workers": 5,
+    "batch_size": 3,
+    "num_workers": 3,
     "feature_map_size": [1, 200, 176],
     "@root_path": "/usr/app/data/CARLA_MULTI/training/",
     "@info_path": "/usr/app/data/CARLA_MULTI/CARLA_infos_train.pkl",
@@ -159,6 +159,19 @@ cfg.NETWORK = {
             "rpn.conv_cls.weight", "rpn.conv_cls.bias",
             "rpn.conv_box.weight", "rpn.conv_box.bias",
             "rpn.conv_dir_cls.weight", "rpn.conv_dir_cls.bias",
+        ],
+        "ignore_params": [
+            "rpn.featext_conv_1.weight", "rpn.featext_conv_1.bias",
+            "rpn.featext_bn_1.weight", "rpn.featext_bn_1.bias",
+            "rpn.featext_bn_1.running_mean", "rpn.featext_bn_1.running_var",
+            "rpn.featext_bn_1.num_batches_tracked",
+            "rpn.featext_conv_2.weight", "rpn.featext_conv_2.bias",
+            "rpn.featext_bn_2.weight", "rpn.featext_bn_2.bias",
+            "rpn.featext_bn_2.running_mean", "rpn.featext_bn_2.running_var",
+            "rpn.featext_bn_2.num_batches_tracked",
+            "rpn.featext_conv_cls.weight", "rpn.featext_conv_cls.bias",
+            "rpn.featext_conv_box.weight", "rpn.featext_conv_box.bias",
+            "rpn.featext_conv_dir_cls.weight", "rpn.featext_conv_dir_cls.bias",
         ]
     },
     "@sub_model_resume_dict": None,
@@ -174,7 +187,11 @@ cfg.NETWORK = {
         "downsample_factor": 8
     },
     "@rpn_dict":{
-        "name": "ResNetRPN",
+        "name": "ResNetRPNFeatExt",
+        "@num_old_classes": 1,
+        "@num_old_anchor_per_loc": 2,
+        "@num_new_classes": 2,
+        "@num_new_anchor_per_loc": 4,
         "@use_norm": True,
         "@num_class": None, # TBD in Network._build_model_and_init()
         "@layer_nums": [5],
