@@ -110,7 +110,7 @@ class Test_compute_loss(unittest.TestCase):
             },
             "hook_layers": ["rpn.deblocks.0.2"],
             "distillation_mode": ["l2sp", "delta", "distillation_loss"],
-            "bool_oldclass_use_newanchor_for_cls": False,
+            "bool_reuse_anchor_for_cls": False,
             "bool_biased_select_with_submodel": False
         }
         self.network = Network(**self.params).cuda()
@@ -605,7 +605,7 @@ class Test_compute_l2_loss(unittest.TestCase):
             },
             "hook_layers": ["rpn.deblocks.0.2"],
             "distillation_mode": ["l2sp", "delta", "distillation_loss"],
-            "bool_oldclass_use_newanchor_for_cls": False,
+            "bool_reuse_anchor_for_cls": False,
             "bool_biased_select_with_submodel": False
         }
         self.network = Network(**self.params).cuda()
@@ -728,7 +728,7 @@ class Test_compute_l2_loss(unittest.TestCase):
             },
             "hook_layers": ["rpn.deblocks.0.2"],
             "distillation_mode": [],
-            "bool_oldclass_use_newanchor_for_cls": False,
+            "bool_reuse_anchor_for_cls": False,
             "bool_biased_select_with_submodel": False
         }
         self.network = Network(**self.params).cuda()
@@ -874,7 +874,7 @@ class Test_compute_l2_loss(unittest.TestCase):
                 },
                 "hook_layers": ["rpn.deblocks.0.2"],
                 "distillation_mode": ["l2sp", "delta", "distillation_loss"],
-                "bool_oldclass_use_newanchor_for_cls": False,
+                "bool_reuse_anchor_for_cls": False,
                 "bool_biased_select_with_submodel": False
             }
             self.network = Network(**self.params).cuda()
@@ -1021,7 +1021,7 @@ class Test_compute_l2_loss(unittest.TestCase):
                 },
                 "hook_layers": ["rpn.deblocks.0.2"],
                 "distillation_mode": ["delta", "distillation_loss"],
-                "bool_oldclass_use_newanchor_for_cls": False,
+                "bool_reuse_anchor_for_cls": False,
                 "bool_biased_select_with_submodel": False
             }
             self.network = Network(**self.params).cuda()

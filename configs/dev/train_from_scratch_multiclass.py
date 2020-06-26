@@ -227,7 +227,7 @@ cfg.NETWORK = {
     },
     "@hook_layers": [],
     "@distillation_mode": [],
-    "@bool_oldclass_use_newanchor_for_cls": False,
+    "@bool_reuse_anchor_for_cls": True,
     "@bool_biased_select_with_submodel": True,
     "@bool_oldclassoldanchor_predicts_only": False,
     "@post_center_range": cfg.TASK["valid_range"].copy(),

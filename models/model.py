@@ -47,7 +47,7 @@ class Network(nn.Module):
         loss_dict={},
         hook_layers=[],
         distillation_mode=[],
-        bool_oldclass_use_newanchor_for_cls=False,
+        bool_reuse_anchor_for_cls=True,
         bool_biased_select_with_submodel=False,
         bool_oldclassoldanchor_predicts_only=False,
         post_center_range=[],
@@ -121,13 +121,13 @@ class Network(nn.Module):
                     for k, v in loss_dict["DistillationRegressionLoss"].items() if is_param(k)}
                 self._distillation_loss_reg_ftor = get_loss_class(loss_dict["DistillationRegressionLoss"]["name"])(**param)
 
-        self._bool_oldclass_use_newanchor_for_cls = True
+        self._bool_reuse_anchor_for_cls = True
         if self._training_mode in ["feature_extraction", "fine_tuning"]:
             self._num_old_classes = self._model_resume_dict["num_classes"]
             self._num_new_classes = len(self._classes_target)
             self._num_old_anchor_per_loc = self._model_resume_dict["num_anchor_per_loc"]
             self._num_new_anchor_per_loc = 2 * self._num_new_classes
-            self._bool_oldclass_use_newanchor_for_cls = bool_oldclass_use_newanchor_for_cls
+            self._bool_reuse_anchor_for_cls = bool_reuse_anchor_for_cls
 
         if "l2sp" in self._distillation_mode or "distillation_loss" in self._distillation_mode:
             self._num_old_classes = self._sub_model_resume_dict["num_classes"]
@@ -204,13 +204,18 @@ class Network(nn.Module):
         elif self._training_mode in ["feature_extraction", "fine_tuning"]:
             num_old_classes = self._num_old_classes
             num_old_anchor_per_loc = self._num_old_anchor_per_loc
-            bool_oldclass_use_newanchor_for_cls = self._bool_oldclass_use_newanchor_for_cls
-            if bool_oldclass_use_newanchor_for_cls:
-                preds_dict["cls_preds"][:, :num_old_anchor_per_loc, ..., :num_old_classes] = \
-                    preds_dict["cls_preds"][:, :num_old_anchor_per_loc, ..., :num_old_classes].detach()
-            else:
-                preds_dict["cls_preds"][..., :num_old_classes] = \
-                    preds_dict["cls_preds"][..., :num_old_classes].detach()
+            old_classes = [i for i in range(self._num_old_classes)]
+            new_classes = [i for i in range(self._num_new_classes)]
+            new_classes_to_learn = [itm for itm in new_classes if itm not in old_classes]
+            tmp_var = preds_dict["cls_preds"]
+            tmp_ts = preds_dict["cls_preds"].detach()
+            if not self._bool_reuse_anchor_for_cls:
+                for cls in new_classes_to_learn:
+                    anchor_list = [2 * cls, 2 * cls + 1]
+                    tmp_ts[:, [anchor_list], ..., [cls]] = tmp_var[:, [anchor_list], ..., [cls]]
+                preds_dict["cls_preds"] = tmp_ts
+            preds_dict["cls_preds"][:, :num_old_anchor_per_loc, ..., :num_old_classes] = \
+                preds_dict["cls_preds"][:, :num_old_anchor_per_loc, ..., :num_old_classes].detach()
             preds_dict["box_preds"][:, :num_old_anchor_per_loc, ...] = \
                 preds_dict["box_preds"][:, :num_old_anchor_per_loc, ...].detach()
             preds_dict["dir_cls_preds"][:, :num_old_anchor_per_loc, ...] = \
@@ -275,6 +280,14 @@ class Network(nn.Module):
         batch_anchors = data["anchors"]
         batch_size = batch_anchors.shape[0]
         preds_dict = self._network_forward(self._model, voxels, num_points, coors, batch_size)
+        
+        if not self._bool_reuse_anchor_for_cls:
+            new_classes = [i for i in range(self._num_new_classes)]
+            cls_preds = torch.zeros_like(preds_dict["cls_preds"])-10
+            for cls in new_classes:
+                anchor_list = [2 * cls, 2 * cls + 1]
+                cls_preds[:, [anchor_list], ..., [cls]] = preds_dict["cls_preds"][:, [anchor_list], ..., [cls]]
+            preds_dict["cls_preds"] = cls_preds
         box_preds = preds_dict["box_preds"].view(batch_size, -1, 7)
         err_msg = f"num_anchors={batch_anchors.shape[1]}, but num_output={box_preds.shape[1]}. please check size"
         assert batch_anchors.shape[1] == box_preds.shape[1], err_msg
@@ -458,13 +471,6 @@ class Network(nn.Module):
         importance = example['importance']
         loss_dict = dict()
 
-        if not self._bool_oldclass_use_newanchor_for_cls:
-            cls_preds_shape = cls_preds.shape
-            num_old_classes = self._num_old_classes
-            num_old_anchor_per_loc = self._num_old_anchor_per_loc
-            labels_ = labels.reshape(*cls_preds_shape[:-1])
-            labels_[:, num_old_anchor_per_loc:, ...] = -1
-            labels = labels_.reshape(cls_preds_shape[0], -1)
         weights = Network._prepare_loss_weights(
             labels,
             pos_cls_weight=self._pos_cls_weight,
@@ -865,11 +871,6 @@ class Network(nn.Module):
             num_old_classes = self._num_old_classes
             # deactivate new classes
             batch_cls_preds[..., num_old_classes:] = -100
-            # deactivate new anchors of old classes
-            batch_cls_preds[:, num_old_anchor_per_loc:, ..., :num_old_classes] = -100
-        if not self._bool_oldclass_use_newanchor_for_cls:
-            num_old_anchor_per_loc = self._num_old_anchor_per_loc
-            num_old_classes = self._num_old_classes
             # deactivate new anchors of old classes
             batch_cls_preds[:, num_old_anchor_per_loc:, ..., :num_old_classes] = -100
 

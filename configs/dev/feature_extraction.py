@@ -6,22 +6,25 @@ cfg = edict()
 
 cfg.TASK = {
     "valid_range": [-35.2, -40, -1.5, 35.2, 40, 2.6],
-    "total_training_steps": 2e3,
+    "total_training_steps": 5e3,
+    "continue_training_steps": 2e3
 }
 
 cfg.TRAIN = {
-    "train_iter": cfg.TASK["total_training_steps"],
+    "train_iter": (cfg.TASK["total_training_steps"] +
+                   cfg.TASK["continue_training_steps"]),
     "num_log_iter": 10,
-    "num_val_iter": 5e2,
-    "num_save_iter": 5e2,
+    "num_val_iter": 1e2,
+    "num_save_iter": 1e2,
     "optimizer_dict":{
         "type": "adam",
-        "init_lr": 1e-3,
+        "init_lr": 5e-3,
         "weight_decay": 0,
     },
     "lr_scheduler_dict":{
         "type": "StepLR",
-        "step_size": cfg.TASK["total_training_steps"] * 0.8,
+        "step_size": (cfg.TASK["total_training_steps"] +
+                      cfg.TASK["continue_training_steps"] * 0.8),
         "gamma": 0.1
     }
 }
@@ -36,7 +39,7 @@ cfg.VOXELIZER = {
 
 cfg.TARGETASSIGNER = {
     "type": "TaskAssignerV1",
-    "@classes": ["Car"],
+    "@classes": ["Car", "Pedestrian"],
     "@feature_map_sizes": None,
     "@positive_fraction": None,
     "@sample_size": 512,
@@ -59,6 +62,20 @@ cfg.TARGETASSIGNER = {
             "type": "NearestIoUSimilarity"
         }
     },
+    "class_settings_pedestrian": {
+        "AnchorGenerator": {
+            "type": "AnchorGeneratorBEV",
+            "@class_name": "Pedestrian",
+            "@anchor_ranges": cfg.TASK["valid_range"].copy(), # TBD in modify_cfg(cfg)
+            "@sizes": [0.6, 0.8, 1.73], # wlh
+            "@rotations": [0, 1.57],
+            "@match_threshold": 0.35,
+            "@unmatch_threshold": 0.2,
+        },
+        "SimilarityCalculator": {
+            "type": "NearestIoUSimilarity"
+        }
+    },
 }
 
 cfg.TRAINDATA = {
@@ -75,7 +92,7 @@ cfg.TRAINDATA = {
         "@augment_dict":
         {
             "p_rot": 0.25,
-            "dry_range": [deg2rad(-45), deg2rad(45)],
+            "dry_range": [deg2rad(-20), deg2rad(20)],
             "p_tr": 0.25,
             "dx_range": [-1, 1],
             "dy_range": [-1, 1],
@@ -90,8 +107,8 @@ cfg.TRAINDATA = {
             "label_range": cfg.TASK["valid_range"].copy(),
             # [min_x, min_y, min_z, max_x, max_y, max_z] FIMU
         },
-        "@feature_map_size": None, # TBD
-        "@classes_to_exclude": []
+        "@feature_map_size": None, # TBD in dataloader_builder.py
+        "@classes_to_exclude": ["Car"]
     }
 }
 
@@ -109,7 +126,7 @@ cfg.VALDATA = {
         "@training": False,
         "@augment_dict": None,
         "@filter_label_dict": dict(),
-        "@feature_map_size": None # TBD
+        "@feature_map_size": None # TBD in dataloader_builder.py
     }
 }
 
@@ -126,14 +143,37 @@ cfg.TESTDATA = {
         "@training": False,
         "@augment_dict": None,
         "@filter_label_dict": dict(),
-        "@feature_map_size": None # TBD
+        "@feature_map_size": None # TBD in dataloader_builder.py
     }
 }
 
 cfg.NETWORK = {
-    "@classes_target": ["Car"],
+    "@classes_target": ["Car", "Pedestrian"],
     "@classes_source": None,
-    "@model_resume_dict": None,
+    "@model_resume_dict":
+    {
+        "ckpt_path": "saved_weights/incdet-dev-train-from-scratch-multi/IncDetMain-5000.tckpt",
+        "num_classes": 1,
+        "num_anchor_per_loc": 2,
+        "partially_load_params": [
+            # "rpn.conv_cls.weight", "rpn.conv_cls.bias",
+            # "rpn.conv_box.weight", "rpn.conv_box.bias",
+            # "rpn.conv_dir_cls.weight", "rpn.conv_dir_cls.bias",
+        ],
+        "ignore_params": [
+            "rpn.featext_conv_1.weight", "rpn.featext_conv_1.bias",
+            "rpn.featext_bn_1.weight", "rpn.featext_bn_1.bias",
+            "rpn.featext_bn_1.running_mean", "rpn.featext_bn_1.running_var",
+            "rpn.featext_bn_1.num_batches_tracked",
+            "rpn.featext_conv_2.weight", "rpn.featext_conv_2.bias",
+            "rpn.featext_bn_2.weight", "rpn.featext_bn_2.bias",
+            "rpn.featext_bn_2.running_mean", "rpn.featext_bn_2.running_var",
+            "rpn.featext_bn_2.num_batches_tracked",
+            "rpn.featext_conv_cls.weight", "rpn.featext_conv_cls.bias",
+            "rpn.featext_conv_box.weight", "rpn.featext_conv_box.bias",
+            "rpn.featext_conv_dir_cls.weight", "rpn.featext_conv_dir_cls.bias",
+        ]
+    },
     "@sub_model_resume_dict": None,
     "@voxel_encoder_dict": {
         "name": "SimpleVoxel",
@@ -147,7 +187,11 @@ cfg.NETWORK = {
         "downsample_factor": 8
     },
     "@rpn_dict":{
-        "name": "ResNetRPN",
+        "name": "ResNetRPNFeatExt",
+        "@num_old_classes": 1,
+        "@num_old_anchor_per_loc": 2,
+        "@num_new_classes": 2,
+        "@num_new_anchor_per_loc": 4,
         "@use_norm": True,
         "@num_class": None, # TBD in Network._build_model_and_init()
         "@layer_nums": [5],
@@ -164,12 +208,12 @@ cfg.NETWORK = {
         "@box_code_size": 7, # TBD
         "@num_direction_bins": 2,
     },
-    "@training_mode": "train_from_scratch",
-    "@is_training": None, #TBD
-    "@weight_decay_coef": 0.001,
+    "@training_mode": "feature_extraction",
+    "@is_training": None, #TBD in main.py
     "@cls_loss_weight": 1.0,
     "@loc_loss_weight": 2.0,
     "@dir_loss_weight": 0.2,
+    "@weight_decay_coef": 0.001,
     "@pos_cls_weight": 1.0,
     "@neg_cls_weight": 1.0,
     "@l2sp_alpha_coef": 1.0,
@@ -207,7 +251,7 @@ cfg.NETWORK = {
     },
     "@hook_layers": [],
     "@distillation_mode": [],
-    "@bool_reuse_anchor_for_cls": True,
+    "@bool_reuse_anchor_for_cls": False,
     "@bool_biased_select_with_submodel": True,
     "@bool_oldclassoldanchor_predicts_only": False,
     "@post_center_range": cfg.TASK["valid_range"].copy(),
