@@ -6,8 +6,8 @@ cfg = edict()
 
 cfg.TASK = {
     "valid_range": [-35.2, -40, -1.5, 35.2, 40, 2.6],
-    "total_training_steps": 2e3,
-    "continue_training_steps": 1e3
+    "total_training_steps": 5e3,
+    "continue_training_steps": 2e3
 }
 
 cfg.TRAIN = {
@@ -81,8 +81,8 @@ cfg.TARGETASSIGNER = {
 cfg.TRAINDATA = {
     "dataset": "carla", # carla
     "training": True,
-    "batch_size": 3,
-    "num_workers": 3,
+    "batch_size": 5,
+    "num_workers": 5,
     "feature_map_size": [1, 200, 176],
     "@root_path": "/usr/app/data/CARLA_MULTI/training/",
     "@info_path": "/usr/app/data/CARLA_MULTI/CARLA_infos_train.pkl",
@@ -92,7 +92,7 @@ cfg.TRAINDATA = {
         "@augment_dict":
         {
             "p_rot": 0.25,
-            "dry_range": [deg2rad(-45), deg2rad(45)],
+            "dry_range": [deg2rad(-20), deg2rad(20)],
             "p_tr": 0.25,
             "dx_range": [-1, 1],
             "dy_range": [-1, 1],
@@ -152,13 +152,13 @@ cfg.NETWORK = {
     "@classes_source": None,
     "@model_resume_dict":
     {
-        "ckpt_path": "saved_weights/incdet-tmp/IncDetMain-2000.tckpt",
+        "ckpt_path": "saved_weights/incdet-dev-train-from-scratch-multi/IncDetMain-5000.tckpt",
         "num_classes": 1,
         "num_anchor_per_loc": 2,
         "partially_load_params": [
-            "rpn.conv_cls.weight", "rpn.conv_cls.bias",
-            "rpn.conv_box.weight", "rpn.conv_box.bias",
-            "rpn.conv_dir_cls.weight", "rpn.conv_dir_cls.bias",
+            # "rpn.conv_cls.weight", "rpn.conv_cls.bias",
+            # "rpn.conv_box.weight", "rpn.conv_box.bias",
+            # "rpn.conv_dir_cls.weight", "rpn.conv_dir_cls.bias",
         ],
         "ignore_params": [
             "rpn.featext_conv_1.weight", "rpn.featext_conv_1.bias",
@@ -251,7 +251,7 @@ cfg.NETWORK = {
     },
     "@hook_layers": [],
     "@distillation_mode": [],
-    "@bool_oldclass_use_newanchor_for_cls": False,
+    "@bool_oldclass_use_newanchor_for_cls": True,
     "@bool_biased_select_with_submodel": True,
     "@bool_oldclassoldanchor_predicts_only": False,
     "@post_center_range": cfg.TASK["valid_range"].copy(),
