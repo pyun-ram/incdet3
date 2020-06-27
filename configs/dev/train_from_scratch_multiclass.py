@@ -89,7 +89,7 @@ cfg.TRAINDATA = {
         "@augment_dict":
         {
             "p_rot": 0.25,
-            "dry_range": [deg2rad(-45), deg2rad(45)],
+            "dry_range": [deg2rad(-20), deg2rad(20)],
             "p_tr": 0.25,
             "dx_range": [-1, 1],
             "dy_range": [-1, 1],
