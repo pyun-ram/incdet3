@@ -122,18 +122,24 @@ class Network(nn.Module):
                 self._distillation_loss_reg_ftor = get_loss_class(loss_dict["DistillationRegressionLoss"]["name"])(**param)
 
         self._bool_reuse_anchor_for_cls = True
-        if self._training_mode in ["feature_extraction", "fine_tuning"]:
+        if self._training_mode in ["feature_extraction", "fine_tuning", "joint_training"]:
             self._num_old_classes = self._model_resume_dict["num_classes"]
-            self._num_new_classes = len(self._classes_target)
             self._num_old_anchor_per_loc = self._model_resume_dict["num_anchor_per_loc"]
+            self._num_new_classes = len(self._classes_target)
             self._num_new_anchor_per_loc = 2 * self._num_new_classes
             self._bool_reuse_anchor_for_cls = bool_reuse_anchor_for_cls
-
-        if "l2sp" in self._distillation_mode or "distillation_loss" in self._distillation_mode:
-            self._num_old_classes = self._sub_model_resume_dict["num_classes"]
-            self._num_old_anchor_per_loc = self._sub_model_resume_dict["num_anchor_per_loc"]
+        elif self._training_mode in ["train_from_scratch"]:
+            self._num_old_classes = 0
+            self._num_old_anchor_per_loc = 0
             self._num_new_classes = len(self._classes_target)
             self._num_new_anchor_per_loc = 2 * self._num_new_classes
+        elif self._training_mode == "lwf":
+            self._num_old_classes = len(self._classes_source)
+            self._num_old_anchor_per_loc = 2 * self._num_old_classes
+            self._num_new_classes = len(self._classes_target)
+            self._num_new_anchor_per_loc = 2 * self._num_new_classes
+        else:
+            raise NotImplementedError
 
         self._channel_weights = None
         if "delta" in self._distillation_mode:
@@ -152,7 +158,7 @@ class Network(nn.Module):
                 self.global_step += resume_step
             except:
                 Logger.log_txt("Failed to parse global_step from ckpt_path. Will train from step 0.")
-        if self._training_mode == "lwf":
+        if len(self._distillation_mode) > 0:
             self._sub_model = self._build_model_and_init(
                 classes=self._classes_source,
                 network_cfg=network_cfg,
@@ -587,6 +593,8 @@ class Network(nn.Module):
             elif not is_head and "l2sp" in self._distillation_mode:
                 # l2sp will compute the weight decay according to old weights
                 loss += 0
+            elif is_head and "l2sp" not in self._distillation_mode and self._training_mode == "joint_training":
+                loss += 0.5 * torch.norm(param, 2) ** 2
             elif name.startswith("rpn.conv_cls"):
                 compute_param = param.reshape(num_new_anchor_per_loc, num_new_classes, *compute_param_shape[1:])
                 compute_oldparam = (compute_param[:num_old_anchor_per_loc, :num_old_classes, ...]
@@ -715,8 +723,13 @@ class Network(nn.Module):
 
     def _compute_l2sp_loss(self):
         loss_alpha = 0
+        assert self._training_mode not in ["train_from_scratch", "feature_extraction"]
         # loss_beta = 0
         sub_model_weights = self._sub_model.state_dict()
+        num_old_classes = self._num_old_classes
+        num_old_anchor_per_loc = self._num_old_anchor_per_loc
+        num_new_classes = self._num_new_classes
+        num_new_anchor_per_loc = self._num_new_anchor_per_loc
         for name, param in self._model.named_parameters():
             is_head = any([name.startswith(headname) for headname in Network.HEAD_NEAMES])
             if not is_head:
@@ -724,30 +737,30 @@ class Network(nn.Module):
             else:
                 compute_param_shape = param.shape
                 if name.startswith("rpn.conv_cls"):
-                    compute_param = param.reshape(self._num_new_anchor_per_loc,
-                        self._num_new_classes, *compute_param_shape[1:])
-                    compute_oldparam = compute_param[:self._num_old_anchor_per_loc,
-                        :self._num_old_classes, ...].reshape(-1, *compute_param_shape[1:]).contiguous()
+                    compute_param = param.reshape(num_new_anchor_per_loc,
+                        num_new_classes, *compute_param_shape[1:])
+                    compute_oldparam = compute_param[:num_old_anchor_per_loc,
+                        :num_old_classes, ...].reshape(-1, *compute_param_shape[1:]).contiguous()
                     # new classes
                     compute_newparam = compute_param[:,
-                        self._num_old_classes:, ...].reshape(-1, *compute_param_shape[1:]).contiguous()
+                        num_old_classes:, ...].reshape(-1, *compute_param_shape[1:]).contiguous()
                     # old classes with new anchors
-                    compute_newparam_ = compute_param[self._num_old_anchor_per_loc:,
-                        :self._num_old_classes, ...].reshape(-1, *compute_param_shape[1:]).contiguous()
+                    compute_newparam_ = compute_param[num_old_anchor_per_loc:,
+                        :num_old_classes, ...].reshape(-1, *compute_param_shape[1:]).contiguous()
                     compute_newparam = torch.cat([compute_newparam, compute_newparam_], dim=0)
                 elif name.startswith("rpn.conv_box"):
-                    compute_param = param.reshape(self._num_new_anchor_per_loc,
+                    compute_param = param.reshape(num_new_anchor_per_loc,
                         7, *compute_param_shape[1:])
-                    compute_oldparam = compute_param[:self._num_old_anchor_per_loc,
+                    compute_oldparam = compute_param[:num_old_anchor_per_loc,
                         ...].reshape(-1, *compute_param_shape[1:]).contiguous()
-                    compute_newparam = compute_param[self._num_old_anchor_per_loc:,
+                    compute_newparam = compute_param[num_old_anchor_per_loc:,
                         ...].reshape(-1, *compute_param_shape[1:]).contiguous()
                 elif name.startswith("rpn.conv_dir_cls"):
-                    compute_param = param.reshape(self._num_new_anchor_per_loc,
+                    compute_param = param.reshape(num_new_anchor_per_loc,
                         2, *compute_param_shape[1:])
-                    compute_oldparam = compute_param[:self._num_old_anchor_per_loc,
+                    compute_oldparam = compute_param[:num_old_anchor_per_loc,
                         ...].reshape(-1, *compute_param_shape[1:]).contiguous()
-                    compute_newparam = compute_param[self._num_old_anchor_per_loc:,
+                    compute_newparam = compute_param[num_old_anchor_per_loc:,
                         ...].reshape(-1, *compute_param_shape[1:]).contiguous()
                 else:
                     raise NotImplementedError

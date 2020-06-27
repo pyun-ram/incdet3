@@ -224,16 +224,16 @@ def train(cfg):
         data = data_dict["data"]
         dataitr_train = data_dict["dataloader_itr"]
         train_info = train_one_iter(model, data, optimizer, lr_scheduler, model.get_global_step())
-        if model.get_global_step() % num_save_iter == 0 or model.get_global_step() == max_iter:
+        if model.get_global_step() % num_save_iter == 0 or model.get_global_step() >= max_iter:
             Network.save_weight(model._model, g_save_dir, model.get_global_step())
             if model._sub_model is not None:
                 Network.save_weight(model._sub_model, g_save_dir, model.get_global_step())
-        if model.get_global_step() % num_log_iter == 0 or model.get_global_step() == max_iter:
+        if model.get_global_step() % num_log_iter == 0 or model.get_global_step() >= max_iter:
             log_train_info(train_info, model.get_global_step())
             time_elapsed = time.time() - g_since
             ert = (time_elapsed / iter_elapsed * (max_iter - model.get_global_step()))
             print(f"Estimated time remaining: {int(ert / 60):d} min {int(ert % 60):d} s")
-        if model.get_global_step() % num_val_iter == 0 or model.get_global_step() == max_iter:
+        if model.get_global_step() % num_val_iter == 0 or model.get_global_step() >= max_iter:
             val_info = val_one_epoch(model, dataloader_val)
             log_val_info(val_info, model.get_global_step())
     Logger.log_txt("Training DONE!")
