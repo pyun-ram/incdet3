@@ -514,7 +514,7 @@ class Network(nn.Module):
                 example["num_points"],
                 example["coordinates"],
                 example["anchors"].shape[0])
-            loss_dict["loss_delta"] = self._compute_delta_loss(channel_weight)
+            loss_dict["loss_delta"] = self._compute_delta_loss(channel_weights)
             self._hook_features_model.clear()
             self._hook_features_submodel.clear()
         if "distillation_loss" in self._distillation_mode:
@@ -862,6 +862,8 @@ class Network(nn.Module):
         """
         def limit_period_torch(val, offset=0.5, period=np.pi):
             return val - torch.floor(val / period + offset) * period
+        self._hook_features_model.clear()
+        self._hook_features_submodel.clear()
         batch_size = example['anchors'].shape[0]
         if "metadata" not in example or len(example["metadata"]) == 0:
             meta_list = [None] * batch_size
