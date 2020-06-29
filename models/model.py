@@ -806,8 +806,8 @@ class Network(nn.Module):
                 dtype=cls_preds.dtype,
                 device=torch.device("cuda:0"))
             for i in range(batch_size):
-                fg_score, _ = torch.max(fg_score[i, ...], dim=-1)
-                tmp, indices = torch.topk(fg_score, num_select)
+                fg_score_, _ = torch.max(fg_score[i, ...], dim=-1)
+                tmp, indices = torch.topk(fg_score_, num_select)
                 weights[i, indices] = 1
             return weights
 
