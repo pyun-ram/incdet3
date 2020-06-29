@@ -81,8 +81,8 @@ cfg.TARGETASSIGNER = {
 cfg.TRAINDATA = {
     "dataset": "carla", # carla
     "training": True,
-    "batch_size": 5,
-    "num_workers": 5,
+    "batch_size": 3,
+    "num_workers": 3,
     "feature_map_size": [1, 200, 176],
     "@root_path": "/usr/app/data/CARLA_MULTI/training/",
     "@info_path": "/usr/app/data/CARLA_MULTI/CARLA_infos_train.pkl",
@@ -165,11 +165,7 @@ cfg.NETWORK = {
         "ckpt_path": "saved_weights/incdet-saveweights/IncDetCar-2000.tckpt",
         "num_classes": 1,
         "num_anchor_per_loc": 2,
-        "partially_load_params": [
-            "rpn.conv_cls.weight", "rpn.conv_cls.bias",
-            "rpn.conv_box.weight", "rpn.conv_box.bias",
-            "rpn.conv_dir_cls.weight", "rpn.conv_dir_cls.bias",
-        ],
+        "partially_load_params": [],
         "ignore_params": []
     },
     "@voxel_encoder_dict": {

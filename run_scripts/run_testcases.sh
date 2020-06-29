@@ -1,4 +1,10 @@
 #!/bin/bash
+./run_scripts/dev/test_joint-training_delta_anchor-reuse.sh
+./run_scripts/dev/test_joint-training_l2sp_anchor-reuse.sh
+./run_scripts/dev/test_joint-training_anchor-reuse.sh
+./run_scripts/dev/test_joint-training_delta.sh
+./run_scripts/dev/test_joint-training_l2sp.sh
+./run_scripts/dev/test_joint-training.sh
 ./run_scripts/dev/test_feature-extraction_newanchor.sh
 ./run_scripts/dev/test_feature-extraction.sh
 ./run_scripts/dev/test_train-from-scratch_multiclass.sh

@@ -240,7 +240,7 @@ cfg.NETWORK = {
     },
     "@hook_layers": ["rpn.blocks.0.4.conv2", "rpn.blocks.0.3.conv2"],
     "@distillation_mode": ["delta"],
-    "@bool_reuse_anchor_for_cls": True,
+    "@bool_reuse_anchor_for_cls": False,
     "@bool_biased_select_with_submodel": True,
     "@bool_oldclassoldanchor_predicts_only": False,
     "@post_center_range": cfg.TASK["valid_range"].copy(),
