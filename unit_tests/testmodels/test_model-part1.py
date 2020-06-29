@@ -11,6 +11,7 @@ import numpy as np
 from incdet3.models.model import Network
 from det3.utils.utils import load_pickle
 from incdet3.utils.utils import bcolors
+from copy import deepcopy
 
 class Test_build_model_and_init(unittest.TestCase):
     '''
@@ -67,7 +68,7 @@ class Test_build_model_and_init(unittest.TestCase):
         '''
         torch.cuda.empty_cache()
         for rpn_name in ["RPNV2", "ResNetRPN"]:
-            network_cfg = Test_build_model_and_init.network_cfg_template.copy()
+            network_cfg = deepcopy(Test_build_model_and_init.network_cfg_template)
             network_cfg["RPN"]["name"] = rpn_name
             network_cfg["RPN"]["@num_class"] = 1
             network_cfg["RPN"]["@num_anchor_per_loc"] = 2
@@ -109,7 +110,7 @@ class Test_build_model_and_init(unittest.TestCase):
         single class, rpnv2&resnet, resume single class
         '''
         for rpn_name in ["RPNV2", "ResNetRPN"]:
-            network_cfg = Test_build_model_and_init.network_cfg_template.copy()
+            network_cfg = deepcopy(Test_build_model_and_init.network_cfg_template)
             network_cfg["RPN"]["name"] = rpn_name
             network_cfg["RPN"]["@num_class"] = 1
             network_cfg["RPN"]["@num_anchor_per_loc"] = 2
@@ -157,7 +158,7 @@ class Test_build_model_and_init(unittest.TestCase):
         multi class (>=3), rpnv2&resnet, no resume
         '''
         for rpn_name in ["RPNV2", "ResNetRPN"]:
-            network_cfg = Test_build_model_and_init.network_cfg_template.copy()
+            network_cfg = deepcopy(Test_build_model_and_init.network_cfg_template)
             network_cfg["RPN"]["name"] = rpn_name
             network_cfg["RPN"]["@num_class"] = 2
             network_cfg["RPN"]["@num_anchor_per_loc"] = 4
@@ -199,7 +200,7 @@ class Test_build_model_and_init(unittest.TestCase):
         multi class (=3), rpnv2&resnet, resume class(0,1,2)
         '''
         for rpn_name in ["RPNV2", "ResNetRPN"]:
-            network_cfg = Test_build_model_and_init.network_cfg_template.copy()
+            network_cfg = deepcopy(Test_build_model_and_init.network_cfg_template)
             network_cfg["RPN"]["name"] = rpn_name
             network_cfg["RPN"]["@num_class"] = 3
             network_cfg["RPN"]["@num_anchor_per_loc"] = 6
@@ -247,7 +248,7 @@ class Test_build_model_and_init(unittest.TestCase):
         multi class (=3), rpnv2&resnet, resume class(0,1)
         '''
         for rpn_name in ["RPNV2", "ResNetRPN"]:
-            network_cfg = Test_build_model_and_init.network_cfg_template.copy()
+            network_cfg = deepcopy(Test_build_model_and_init.network_cfg_template)
             network_cfg["RPN"]["name"] = rpn_name
             network_cfg["RPN"]["@num_class"] = 3
             network_cfg["RPN"]["@num_anchor_per_loc"] = 6
@@ -304,7 +305,7 @@ class Test_build_model_and_init(unittest.TestCase):
         multi class (=3), rpnv2&resnet, resume class(0)
         '''
         for rpn_name in ["RPNV2", "ResNetRPN"]:
-            network_cfg = Test_build_model_and_init.network_cfg_template.copy()
+            network_cfg = deepcopy(Test_build_model_and_init.network_cfg_template)
             network_cfg["RPN"]["name"] = rpn_name
             network_cfg["RPN"]["@num_class"] = 3
             network_cfg["RPN"]["@num_anchor_per_loc"] = 6
@@ -394,7 +395,7 @@ class Test_freeze_model_and_detach_variables(unittest.TestCase):
         training scheme: train_from_scratch
         '''
         for rpn_name in ["RPNV2", "ResNetRPN"]:
-            network_cfg = Test_freeze_model_and_detach_variables.network_cfg_template.copy()
+            network_cfg = deepcopy(Test_freeze_model_and_detach_variables.network_cfg_template)
             network_cfg["RPN"]["name"] = rpn_name
             network_cfg["RPN"]["@num_class"] = 2
             network_cfg["RPN"]["@num_anchor_per_loc"] = 4
@@ -449,7 +450,7 @@ class Test_freeze_model_and_detach_variables(unittest.TestCase):
         training scheme: joint_training
         '''
         for rpn_name in ["RPNV2", "ResNetRPN"]:
-            network_cfg = Test_freeze_model_and_detach_variables.network_cfg_template.copy()
+            network_cfg = deepcopy(Test_freeze_model_and_detach_variables.network_cfg_template)
             network_cfg["RPN"]["name"] = rpn_name
             network_cfg["RPN"]["@num_class"] = 2
             network_cfg["RPN"]["@num_anchor_per_loc"] = 4
@@ -509,7 +510,7 @@ class Test_freeze_model_and_detach_variables(unittest.TestCase):
         training scheme: lwf
         '''
         for rpn_name in ["RPNV2", "ResNetRPN"]:
-            network_cfg = Test_freeze_model_and_detach_variables.network_cfg_template.copy()
+            network_cfg = deepcopy(Test_freeze_model_and_detach_variables.network_cfg_template)
             network_cfg["RPN"]["name"] = rpn_name
             network_cfg["RPN"]["@num_class"] = 2
             network_cfg["RPN"]["@num_anchor_per_loc"] = 4
@@ -592,7 +593,7 @@ class Test_freeze_model_and_detach_variables(unittest.TestCase):
         '''
         for rpn_name in ["RPNV2", "ResNetRPN"]:
             for bool_reuse_anchor_for_cls in [True, False]:
-                network_cfg = Test_freeze_model_and_detach_variables.network_cfg_template.copy()
+                network_cfg = deepcopy(Test_freeze_model_and_detach_variables.network_cfg_template)
                 network_cfg["RPN"]["name"] = rpn_name
                 network_cfg["RPN"]["@num_class"] = 2
                 network_cfg["RPN"]["@num_anchor_per_loc"] = 4
@@ -701,7 +702,7 @@ class Test_freeze_model_and_detach_variables(unittest.TestCase):
         '''
         for rpn_name in ["RPNV2", "ResNetRPN"]:
             for bool_reuse_anchor_for_cls in [True, False]:
-                network_cfg = Test_freeze_model_and_detach_variables.network_cfg_template.copy()
+                network_cfg = deepcopy(Test_freeze_model_and_detach_variables.network_cfg_template)
                 network_cfg["RPN"]["name"] = rpn_name
                 network_cfg["RPN"]["@num_class"] = 3
                 network_cfg["RPN"]["@num_anchor_per_loc"] = 6
@@ -805,7 +806,7 @@ class Test_freeze_model_and_detach_variables(unittest.TestCase):
         '''
         for rpn_name in ["ResNetRPNFeatExt"]:
             for bool_reuse_anchor_for_cls in [True, False]:
-                network_cfg = Test_freeze_model_and_detach_variables.network_cfg_template.copy()
+                network_cfg = deepcopy(Test_freeze_model_and_detach_variables.network_cfg_template)
                 network_cfg["RPN"]["name"] = rpn_name
                 network_cfg["RPN"]["@num_class"] = 2
                 network_cfg["RPN"]["@num_anchor_per_loc"] = 4
@@ -912,7 +913,7 @@ class Test_freeze_model_and_detach_variables(unittest.TestCase):
         '''
         for rpn_name in ["ResNetRPNFeatExt"]:
             for bool_reuse_anchor_for_cls in [True, False]:
-                network_cfg = Test_freeze_model_and_detach_variables.network_cfg_template.copy()
+                network_cfg = deepcopy(Test_freeze_model_and_detach_variables.network_cfg_template)
                 network_cfg["RPN"]["name"] = rpn_name
                 network_cfg["RPN"]["@num_class"] = 3
                 network_cfg["RPN"]["@num_anchor_per_loc"] = 6
@@ -1044,7 +1045,7 @@ class Test_register_hook(unittest.TestCase):
     name_template = "IncDetTest"
     def test_register_model_hook(self):
         for rpn_name in ["RPNV2", "ResNetRPN"]:
-            network_cfg = Test_register_hook.network_cfg_template.copy()
+            network_cfg = deepcopy(Test_register_hook.network_cfg_template)
             network_cfg["RPN"]["name"] = rpn_name
             network_cfg["RPN"]["@num_class"] = 2
             network_cfg["RPN"]["@num_anchor_per_loc"] = 4
@@ -1125,7 +1126,7 @@ class Test_predict(unittest.TestCase):
     name_template = "IncDetTest"
     def test_predict(self):
         for rpn_name in ["RPNV2", "ResNetRPN"]:
-            network_cfg = Test_predict.network_cfg_template.copy()
+            network_cfg = deepcopy(Test_predict.network_cfg_template)
             network_cfg["RPN"]["name"] = rpn_name
             network_cfg["RPN"]["@num_class"] = 2
             network_cfg["RPN"]["@num_anchor_per_loc"] = 4
@@ -1226,7 +1227,7 @@ class Test_train(unittest.TestCase):
     name_template = "IncDetTest"
     def test_train_train_from_scratch(self):
         for rpn_name in ["RPNV2", "ResNetRPN"]:
-            network_cfg = Test_train.network_cfg_template.copy()
+            network_cfg = deepcopy(Test_train.network_cfg_template)
             network_cfg["RPN"]["name"] = rpn_name
             network_cfg["RPN"]["@num_class"] = 2
             network_cfg["RPN"]["@num_anchor_per_loc"] = 4
@@ -1251,7 +1252,6 @@ class Test_train(unittest.TestCase):
             network = Network(**params).cuda()
             from det3.ops import read_pkl
             from incdet3.builders.dataloader_builder import example_convert_to_torch
-            from copy import deepcopy
             example = read_pkl("unit_tests/data/test_model.pkl")
             example = example_convert_to_torch(example,
                 dtype=torch.float32,
@@ -1279,7 +1279,7 @@ class Test_train(unittest.TestCase):
 
     def test_joint_training(self):
         for rpn_name in ["RPNV2", "ResNetRPN"]:
-            network_cfg = Test_train.network_cfg_template.copy()
+            network_cfg = deepcopy(Test_train.network_cfg_template)
             network_cfg["RPN"]["name"] = rpn_name
             network_cfg["RPN"]["@num_class"] = 2
             network_cfg["RPN"]["@num_anchor_per_loc"] = 4
@@ -1310,7 +1310,6 @@ class Test_train(unittest.TestCase):
             network = Network(**params).cuda()
             from det3.ops import read_pkl
             from incdet3.builders.dataloader_builder import example_convert_to_torch
-            from copy import deepcopy
             example = read_pkl("unit_tests/data/test_model.pkl")
             example = example_convert_to_torch(example,
                 dtype=torch.float32,
@@ -1335,7 +1334,7 @@ class Test_train(unittest.TestCase):
 
     def test_fine_tuning(self):
         for rpn_name in ["RPNV2", "ResNetRPN"]:
-            network_cfg = Test_train.network_cfg_template.copy()
+            network_cfg = deepcopy(Test_train.network_cfg_template)
             network_cfg["RPN"]["name"] = rpn_name
             network_cfg["RPN"]["@num_class"] = 2
             network_cfg["RPN"]["@num_anchor_per_loc"] = 4
@@ -1370,7 +1369,6 @@ class Test_train(unittest.TestCase):
             network = Network(**params).cuda()
             from det3.ops import read_pkl
             from incdet3.builders.dataloader_builder import example_convert_to_torch
-            from copy import deepcopy
             example = read_pkl("unit_tests/data/test_model.pkl")
             example = example_convert_to_torch(example,
                 dtype=torch.float32,
@@ -1395,7 +1393,7 @@ class Test_train(unittest.TestCase):
 
     def test_lwf(self):
         for rpn_name in ["RPNV2", "ResNetRPN"]:
-            network_cfg = Test_train.network_cfg_template.copy()
+            network_cfg = deepcopy(Test_train.network_cfg_template)
             network_cfg["RPN"]["name"] = rpn_name
             network_cfg["RPN"]["@num_class"] = 2
             network_cfg["RPN"]["@num_anchor_per_loc"] = 4
@@ -1431,7 +1429,6 @@ class Test_train(unittest.TestCase):
             network = Network(**params).cuda()
             from det3.ops import read_pkl
             from incdet3.builders.dataloader_builder import example_convert_to_torch
-            from copy import deepcopy
             example = read_pkl("unit_tests/data/test_model.pkl")
             example = example_convert_to_torch(example,
                 dtype=torch.float32,
@@ -1453,6 +1450,72 @@ class Test_train(unittest.TestCase):
 
             for k, v in network_sd1.items():
                 self.assertTrue(torch.all(v == network_sd2[k]))
+
+    def test_feature_extraction(self):
+        for rpn_name in ["ResNetRPNFeatExt"]:
+            network_cfg = deepcopy(Test_train.network_cfg_template)
+            network_cfg["RPN"]["name"] = rpn_name
+            network_cfg["RPN"]["@num_class"] = 2
+            network_cfg["RPN"]["@num_anchor_per_loc"] = 4
+            network_cfg["RPN"]["@num_old_classes"] = 1
+            network_cfg["RPN"]["@num_old_anchor_per_loc"] = 2
+            network_cfg["RPN"]["@num_new_classes"] = 2
+            network_cfg["RPN"]["@num_new_anchor_per_loc"] = 4
+            params = {
+                "classes_target": ["Car", "Pedestrian"],
+                "classes_source": ["Car"],
+                "model_resume_dict": {
+                    "ckpt_path": None,
+                    "num_classes": 1,
+                    "num_anchor_per_loc": 2,
+                    "partially_load_params": []
+                },
+                "sub_model_resume_dict": {
+                    "num_classes": 1,
+                    "num_anchor_per_loc": 2,
+                    "ckpt_path": None,
+                    "partially_load_params": []
+                },
+                "voxel_encoder_dict": network_cfg["VoxelEncoder"],
+                "middle_layer_dict": network_cfg["MiddleLayer"],
+                "rpn_dict": network_cfg["RPN"],
+                "training_mode": "feature_extraction",
+                "hook_layers": [],
+                "is_training": True,
+                "bool_reuse_anchor_for_cls": False,
+                "post_center_range" : [-35.2, -40, -1.5, 35.2, 40, 2.6],
+                "nms_score_thresholds" : [0.6] ,
+                "nms_pre_max_sizes" : [1000],
+                "nms_post_max_sizes" : [100],
+                "nms_iou_thresholds" : [0.3],
+            }
+            network = Network(**params).cuda()
+            from det3.ops import read_pkl
+            from incdet3.builders.dataloader_builder import example_convert_to_torch
+            example = read_pkl("unit_tests/data/test_model.pkl")
+            example = example_convert_to_torch(example,
+                dtype=torch.float32,
+                device=torch.device("cuda:0"))
+
+            network.train()
+            network_sd1 = deepcopy(network.state_dict())
+            voxels = example["voxels"]
+            num_points = example["num_points"]
+            coors = example["coordinates"]
+            batch_anchors = example["anchors"]
+            batch_size = batch_anchors.shape[0]
+            preds_dict = network._network_forward(network._model, voxels, num_points, coors, batch_size)
+            box_preds = preds_dict["box_preds"].view(batch_size, -1, 7)
+            err_msg = f"num_anchors={batch_anchors.shape[1]}, but num_output={box_preds.shape[1]}. please check size"
+            assert batch_anchors.shape[1] == box_preds.shape[1], err_msg
+            network._detach_variables(preds_dict)
+            network_sd2 = deepcopy(network.state_dict())
+
+            for k, v in network_sd1.items():
+                if "rpn.featext_" in k and "weight" not in k and "bias" not in k:
+                    self.assertFalse(torch.all(v == network_sd2[k]))
+                else:
+                    self.assertTrue(torch.all(v == network_sd2[k]))
 
 class Test_eval(unittest.TestCase):
     network_cfg_template =  {
@@ -1489,7 +1552,7 @@ class Test_eval(unittest.TestCase):
     name_template = "IncDetTest"
     def test_train_train_from_scratch(self):
         for rpn_name in ["RPNV2", "ResNetRPN"]:
-            network_cfg = Test_eval.network_cfg_template.copy()
+            network_cfg = deepcopy(Test_eval.network_cfg_template)
             network_cfg["RPN"]["name"] = rpn_name
             network_cfg["RPN"]["@num_class"] = 2
             network_cfg["RPN"]["@num_anchor_per_loc"] = 4
@@ -1514,7 +1577,6 @@ class Test_eval(unittest.TestCase):
             network = Network(**params).cuda()
             from det3.ops import read_pkl
             from incdet3.builders.dataloader_builder import example_convert_to_torch
-            from copy import deepcopy
             example = read_pkl("unit_tests/data/test_model.pkl")
             example = example_convert_to_torch(example,
                 dtype=torch.float32,
@@ -1539,7 +1601,7 @@ class Test_eval(unittest.TestCase):
 
     def test_joint_training(self):
         for rpn_name in ["RPNV2", "ResNetRPN"]:
-            network_cfg = Test_eval.network_cfg_template.copy()
+            network_cfg = deepcopy(Test_eval.network_cfg_template)
             network_cfg["RPN"]["name"] = rpn_name
             network_cfg["RPN"]["@num_class"] = 2
             network_cfg["RPN"]["@num_anchor_per_loc"] = 4
@@ -1570,7 +1632,6 @@ class Test_eval(unittest.TestCase):
             network = Network(**params).cuda()
             from det3.ops import read_pkl
             from incdet3.builders.dataloader_builder import example_convert_to_torch
-            from copy import deepcopy
             example = read_pkl("unit_tests/data/test_model.pkl")
             example = example_convert_to_torch(example,
                 dtype=torch.float32,
@@ -1595,7 +1656,7 @@ class Test_eval(unittest.TestCase):
 
     def test_fine_tuning(self):
         for rpn_name in ["RPNV2", "ResNetRPN"]:
-            network_cfg = Test_eval.network_cfg_template.copy()
+            network_cfg = deepcopy(Test_eval.network_cfg_template)
             network_cfg["RPN"]["name"] = rpn_name
             network_cfg["RPN"]["@num_class"] = 2
             network_cfg["RPN"]["@num_anchor_per_loc"] = 4
@@ -1630,7 +1691,6 @@ class Test_eval(unittest.TestCase):
             network = Network(**params).cuda()
             from det3.ops import read_pkl
             from incdet3.builders.dataloader_builder import example_convert_to_torch
-            from copy import deepcopy
             example = read_pkl("unit_tests/data/test_model.pkl")
             example = example_convert_to_torch(example,
                 dtype=torch.float32,
@@ -1655,7 +1715,7 @@ class Test_eval(unittest.TestCase):
 
     def test_lwf(self):
         for rpn_name in ["RPNV2", "ResNetRPN"]:
-            network_cfg = Test_eval.network_cfg_template.copy()
+            network_cfg = deepcopy(Test_eval.network_cfg_template)
             network_cfg["RPN"]["name"] = rpn_name
             network_cfg["RPN"]["@num_class"] = 2
             network_cfg["RPN"]["@num_anchor_per_loc"] = 4
@@ -1691,7 +1751,61 @@ class Test_eval(unittest.TestCase):
             network = Network(**params).cuda()
             from det3.ops import read_pkl
             from incdet3.builders.dataloader_builder import example_convert_to_torch
-            from copy import deepcopy
+            example = read_pkl("unit_tests/data/test_model.pkl")
+            example = example_convert_to_torch(example,
+                dtype=torch.float32,
+                device=torch.device("cuda:0"))
+
+            network.eval()
+            network_sd1 = deepcopy(network.state_dict())
+            voxels = example["voxels"]
+            num_points = example["num_points"]
+            coors = example["coordinates"]
+            batch_anchors = example["anchors"]
+            batch_size = batch_anchors.shape[0]
+            preds_dict = network._network_forward(network._model, voxels, num_points, coors, batch_size)
+            box_preds = preds_dict["box_preds"].view(batch_size, -1, 7)
+            err_msg = f"num_anchors={batch_anchors.shape[1]}, but num_output={box_preds.shape[1]}. please check size"
+            assert batch_anchors.shape[1] == box_preds.shape[1], err_msg
+            network._detach_variables(preds_dict)
+            network_sd2 = deepcopy(network.state_dict())
+
+            for k, v in network_sd1.items():
+                self.assertTrue(torch.all(v == network_sd2[k]))
+
+    def test_feature_extraction(self):
+        for rpn_name in ["ResNetRPNFeatExt"]:
+            network_cfg = deepcopy(Test_eval.network_cfg_template)
+            network_cfg["RPN"]["name"] = rpn_name
+            network_cfg["RPN"]["@num_class"] = 2
+            network_cfg["RPN"]["@num_anchor_per_loc"] = 4
+            params = {
+                "classes_target": ["Car", "Pedestrian"],
+                "classes_source": ["Car"],
+                "model_resume_dict": {
+                    "ckpt_path": None,
+                    "num_classes": 1,
+                    "num_anchor_per_loc": 2,
+                    "partially_load_params": [],
+                    "ignore_parms": []
+                },
+                "sub_model_resume_dict": None,
+                "voxel_encoder_dict": network_cfg["VoxelEncoder"],
+                "middle_layer_dict": network_cfg["MiddleLayer"],
+                "rpn_dict": network_cfg["RPN"],
+                "training_mode": "feature_extraction",
+                "hook_layers": [],
+                "is_training": True,
+                "bool_reuse_anchor_for_cls": False,
+                "post_center_range" : [-35.2, -40, -1.5, 35.2, 40, 2.6],
+                "nms_score_thresholds" : [0.6] ,
+                "nms_pre_max_sizes" : [1000],
+                "nms_post_max_sizes" : [100],
+                "nms_iou_thresholds" : [0.3],
+            }
+            network = Network(**params).cuda()
+            from det3.ops import read_pkl
+            from incdet3.builders.dataloader_builder import example_convert_to_torch
             example = read_pkl("unit_tests/data/test_model.pkl")
             example = example_convert_to_torch(example,
                 dtype=torch.float32,

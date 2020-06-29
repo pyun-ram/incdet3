@@ -11,6 +11,7 @@ import numpy as np
 from incdet3.models.model import Network
 from det3.utils.utils import load_pickle
 from incdet3.utils.utils import bcolors
+from copy import deepcopy
 
 class Test_compute_loss(unittest.TestCase):
     def __init__(self, *args, **kwargs):
@@ -48,7 +49,7 @@ class Test_compute_loss(unittest.TestCase):
         }
         name_template = "IncDetTest"
         rpn_name = "ResNetRPN"
-        network_cfg = network_cfg_template.copy()
+        network_cfg = deepcopy(network_cfg_template)
         network_cfg["RPN"]["name"] = rpn_name
         network_cfg["RPN"]["@num_class"] = 3
         network_cfg["RPN"]["@num_anchor_per_loc"] = 6
@@ -493,7 +494,7 @@ class Test_compute_l2_loss(unittest.TestCase):
         }
         name_template = "IncDetTest"
         rpn_name = "ResNetRPN"
-        network_cfg = network_cfg_template.copy()
+        network_cfg = deepcopy(network_cfg_template)
         network_cfg["RPN"]["name"] = rpn_name
         network_cfg["RPN"]["@num_class"] = 3
         network_cfg["RPN"]["@num_anchor_per_loc"] = 6
@@ -608,7 +609,7 @@ class Test_compute_l2_loss(unittest.TestCase):
         }
         name_template = "IncDetTest"
         rpn_name = "ResNetRPNFeatExt"
-        network_cfg = network_cfg_template.copy()
+        network_cfg = deepcopy(network_cfg_template)
         network_cfg["RPN"]["name"] = rpn_name
         network_cfg["RPN"]["@num_class"] = 3
         network_cfg["RPN"]["@num_anchor_per_loc"] = 6
@@ -762,7 +763,7 @@ class Test_compute_l2_loss(unittest.TestCase):
             }
             name_template = "IncDetTest"
             rpn_name = "ResNetRPN"
-            network_cfg = network_cfg_template.copy()
+            network_cfg = deepcopy(network_cfg_template)
             network_cfg["RPN"]["name"] = rpn_name
             network_cfg["RPN"]["@num_class"] = 3
             network_cfg["RPN"]["@num_anchor_per_loc"] = 6
@@ -909,7 +910,7 @@ class Test_compute_l2_loss(unittest.TestCase):
             }
             name_template = "IncDetTest"
             rpn_name = "ResNetRPN"
-            network_cfg = network_cfg_template.copy()
+            network_cfg = deepcopy(network_cfg_template)
             network_cfg["RPN"]["name"] = rpn_name
             network_cfg["RPN"]["@num_class"] = 3
             network_cfg["RPN"]["@num_anchor_per_loc"] = 6
@@ -1015,7 +1016,7 @@ class Test_compute_l2_loss(unittest.TestCase):
             self.assertTrue(torch.all(hc_loss == loss))
 
 class Test_compute_l2sp_loss(unittest.TestCase):
-    def test_joint_training(self):
+    def test_joint_training_lwf_fine_tuning(self):
         for training_mode in ["joint_training", "lwf", "fine_tuning"]:
             network_cfg_template =  {
                 "VoxelEncoder": {
@@ -1050,7 +1051,7 @@ class Test_compute_l2sp_loss(unittest.TestCase):
             }
             name_template = "IncDetTest"
             rpn_name = "ResNetRPN"
-            network_cfg = network_cfg_template.copy()
+            network_cfg = deepcopy(network_cfg_template)
             network_cfg["RPN"]["name"] = rpn_name
             network_cfg["RPN"]["@num_class"] = 3
             network_cfg["RPN"]["@num_anchor_per_loc"] = 6

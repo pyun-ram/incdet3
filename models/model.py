@@ -741,26 +741,15 @@ class Network(nn.Module):
                         num_new_classes, *compute_param_shape[1:])
                     compute_oldparam = compute_param[:num_old_anchor_per_loc,
                         :num_old_classes, ...].reshape(-1, *compute_param_shape[1:]).contiguous()
-                    # new classes
-                    compute_newparam = compute_param[:,
-                        num_old_classes:, ...].reshape(-1, *compute_param_shape[1:]).contiguous()
-                    # old classes with new anchors
-                    compute_newparam_ = compute_param[num_old_anchor_per_loc:,
-                        :num_old_classes, ...].reshape(-1, *compute_param_shape[1:]).contiguous()
-                    compute_newparam = torch.cat([compute_newparam, compute_newparam_], dim=0)
                 elif name.startswith("rpn.conv_box"):
                     compute_param = param.reshape(num_new_anchor_per_loc,
                         7, *compute_param_shape[1:])
                     compute_oldparam = compute_param[:num_old_anchor_per_loc,
                         ...].reshape(-1, *compute_param_shape[1:]).contiguous()
-                    compute_newparam = compute_param[num_old_anchor_per_loc:,
-                        ...].reshape(-1, *compute_param_shape[1:]).contiguous()
                 elif name.startswith("rpn.conv_dir_cls"):
                     compute_param = param.reshape(num_new_anchor_per_loc,
                         2, *compute_param_shape[1:])
                     compute_oldparam = compute_param[:num_old_anchor_per_loc,
-                        ...].reshape(-1, *compute_param_shape[1:]).contiguous()
-                    compute_newparam = compute_param[num_old_anchor_per_loc:,
                         ...].reshape(-1, *compute_param_shape[1:]).contiguous()
                 else:
                     raise NotImplementedError
@@ -996,9 +985,18 @@ class Network(nn.Module):
         if self._training_mode == "train_from_scratch":
             self._model.train()
             assert self._sub_model is None
-        elif self._training_mode in ["feature_extraction", "joint_training", "fine_tuning", "lwf"]:
+        elif self._training_mode in ["joint_training", "fine_tuning", "lwf"]:
             # freeze bn and no dropout
             self._model.eval()
+            if self._sub_model is not None:
+                self._sub_model.eval()
+        elif self._training_mode in ["feature_extraction"]:
+            # freeze bn and no dropout except for new layers
+            for name, layer in self._model.named_modules():
+                if "rpn.featext" not in name:
+                    layer.eval()
+                else:
+                    layer.train()
             if self._sub_model is not None:
                 self._sub_model.eval()
         else:
