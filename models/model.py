@@ -44,12 +44,14 @@ class Network(nn.Module):
         distillation_loss_cls_coef=1.0,
         distillation_loss_reg_coef=1.0,
         num_biased_select=64,
+        threshold_delta_fgmask=0.3,
         loss_dict={},
         hook_layers=[],
         distillation_mode=[],
         bool_reuse_anchor_for_cls=True,
         bool_biased_select_with_submodel=False,
         bool_oldclassoldanchor_predicts_only=False,
+        bool_delta_use_mask=False,
         post_center_range=[],
         nms_score_thresholds=[],
         nms_pre_max_sizes=[],
@@ -90,6 +92,7 @@ class Network(nn.Module):
         self._distillation_loss_cls_coef = distillation_loss_cls_coef
         self._distillation_loss_reg_coef = distillation_loss_reg_coef
         self._num_biased_select = num_biased_select
+        self._threshold_delta_fgmask = threshold_delta_fgmask
         self._bool_biased_select_with_submodel = bool_biased_select_with_submodel
         self._bool_oldclassoldanchor_predicts_only = bool_oldclassoldanchor_predicts_only
         self._post_center_range = post_center_range
@@ -121,13 +124,12 @@ class Network(nn.Module):
                     for k, v in loss_dict["DistillationRegressionLoss"].items() if is_param(k)}
                 self._distillation_loss_reg_ftor = get_loss_class(loss_dict["DistillationRegressionLoss"]["name"])(**param)
 
-        self._bool_reuse_anchor_for_cls = True
+        self._bool_reuse_anchor_for_cls = bool_reuse_anchor_for_cls
         if self._training_mode in ["feature_extraction", "fine_tuning", "joint_training"]:
             self._num_old_classes = self._model_resume_dict["num_classes"]
             self._num_old_anchor_per_loc = self._model_resume_dict["num_anchor_per_loc"]
             self._num_new_classes = len(self._classes_target)
             self._num_new_anchor_per_loc = 2 * self._num_new_classes
-            self._bool_reuse_anchor_for_cls = bool_reuse_anchor_for_cls
         elif self._training_mode in ["train_from_scratch"]:
             self._num_old_classes = 0
             self._num_old_anchor_per_loc = 0
@@ -142,8 +144,10 @@ class Network(nn.Module):
             raise NotImplementedError
 
         self._channel_weights = None
+        self._bool_delta_use_mask = False
         if "delta" in self._distillation_mode:
             self._channel_weights = None # TBD
+            self._bool_delta_use_mask = bool_delta_use_mask
 
         self._model = Network._build_model_and_init(
             classes=self._classes_target,
@@ -514,7 +518,12 @@ class Network(nn.Module):
                 example["num_points"],
                 example["coordinates"],
                 example["anchors"].shape[0])
-            loss_dict["loss_delta"] = self._compute_delta_loss(channel_weights)
+            delta_fg_mask = (Network._delta_create_fg_mask(
+                preds_dict_sub["cls_preds"],
+                score_threshold=self._threshold_delta_fgmask,
+                num_feat_channel=128)
+                if self._bool_delta_use_mask else None)
+            loss_dict["loss_delta"] = self._compute_delta_loss(channel_weights, delta_fg_mask)
             self._hook_features_model.clear()
             self._hook_features_submodel.clear()
         if "distillation_loss" in self._distillation_mode:
@@ -759,15 +768,20 @@ class Network(nn.Module):
         return self._l2sp_alpha_coef * loss_alpha
 
     def _compute_delta_loss(self,
-        channel_weights):
+        channel_weights,
+        mask):
         def flatten_outputs(fea):
             return torch.reshape(fea, (fea.shape[0], fea.shape[1], fea.shape[2] * fea.shape[3]))
         fea_loss = 0
-        if channel_weights is None:
+        if channel_weights is None and mask is None:
             for fm_model, fm_submodel in zip(self._hook_features_model, self._hook_features_submodel):
                 b, c, h, w = fm_model.shape
                 fea_loss += 0.5 * (torch.norm(fm_model - fm_submodel.detach()) ** 2)
-        else:
+        elif channel_weights is None and mask is not None:
+            for fm_model, fm_submodel in zip(self._hook_features_model, self._hook_features_submodel):
+                b, c, h, w = fm_model.shape
+                fea_loss += 0.5 * (torch.norm(fm_model*mask - fm_submodel.detach()*mask) ** 2)
+        elif channel_weights is not None and mask is None:
             for i, (fm_model, fm_submodel) in enumerate(zip(self._hook_features_model, self._hook_features_submodel)):
                 b, c, h, w = fm_model.shape
                 fm_model = flatten_outputs(fm_model)
@@ -779,7 +793,24 @@ class Network(nn.Module):
             Logger.log_txt(bcolors.WARNING +
                 "Network._compute_delta_loss() with channel_weights needs unit-test." +
                 bcolors.ENDC)
+        else:
+            raise NotImplementedError
         return self._delta_coef * fea_loss
+
+    @staticmethod
+    def _delta_create_fg_mask(cls_preds,
+        score_threshold=0.5,
+        num_feat_channel=128):
+        batch_size = cls_preds.shape[0]
+        cls_preds_shape = cls_preds.shape
+        mask = torch.zeros(batch_size, 1, cls_preds_shape[2], cls_preds_shape[3],
+            dtype=torch.float32, device=torch.device("cuda:0"))
+        for i in range(batch_size):
+            fg_score, _ = torch.max(cls_preds[i, ...], dim=0)
+            fg_score, _ = torch.max(fg_score, dim=-1)
+            mask[i, 0, ...] = (torch.sigmoid(fg_score) > score_threshold).squeeze(-1).float()
+        mask = mask.repeat([1, num_feat_channel, 1, 1]).detach()
+        return mask
 
     def _compute_distillation_loss(self, preds_dict, preds_dict_sub):
         def _compute_weights(cls_preds, num_select=64):

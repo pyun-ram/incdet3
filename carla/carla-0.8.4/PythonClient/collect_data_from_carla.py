@@ -147,7 +147,7 @@ def make_carla_settings(args):
 	"""Make a CarlaSettings object with the settings we need."""
 	settings = CarlaSettings()
 	if args.with_ped:
-		num_of_ped = 100
+		num_of_ped = 300
 	else:
 		num_of_ped = 0
 	settings.set(

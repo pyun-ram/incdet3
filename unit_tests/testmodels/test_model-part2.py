@@ -227,7 +227,7 @@ class Test_compute_loss(unittest.TestCase):
         hc_loss = hc_xe_term * hc_weights
         self.assertTrue(torch.allclose(hc_loss, loss))
 
-    def test_delta_loss_woatten(self):
+    def test_delta_loss_woatten_womask(self):
         network = self.network
         data = self.data
         delta_coef = self.params["delta_coef"]
@@ -243,7 +243,7 @@ class Test_compute_loss(unittest.TestCase):
             data["num_points"],
             data["coordinates"],
             data["anchors"].shape[0])
-        loss = network._compute_delta_loss(None)
+        loss = network._compute_delta_loss(None, None)
         hc_feat = network._hook_features_model
         hc_feat_sub = network._hook_features_submodel
         hc_loss = 0
@@ -255,8 +255,40 @@ class Test_compute_loss(unittest.TestCase):
         network._hook_features_model.clear()
         network._hook_features_submodel.clear()
 
-    def test_delta_loss_atten(self):
+    def test_delta_loss_atten_womask(self):
         print(bcolors.WARNING+ "test_delta_loss_atten() TBD" + bcolors.ENDC)
+
+    def test_delta_loss_woatten_wmask(self):
+        network = self.network
+        data = self.data
+        delta_coef = self.params["delta_coef"]
+        network._hook_features_model.clear()
+        network._hook_features_submodel.clear()
+        preds_dict = network._network_forward(network._model,
+            data["voxels"],
+            data["num_points"],
+            data["coordinates"],
+            data["anchors"].shape[0])
+        preds_dict_sub = network._network_forward(network._sub_model,
+            data["voxels"],
+            data["num_points"],
+            data["coordinates"],
+            data["anchors"].shape[0])
+        mask = Network._delta_create_fg_mask(
+                        preds_dict_sub["cls_preds"],
+                        score_threshold=0.9,
+                        num_feat_channel=128)
+        loss = network._compute_delta_loss(None, mask)
+        hc_feat = network._hook_features_model
+        hc_feat_sub = network._hook_features_submodel
+        hc_loss = 0
+        for feat_, feat_sub_ in zip(hc_feat, hc_feat_sub):
+            assert feat_.shape == feat_sub_.shape
+            hc_loss += 0.5 * torch.norm(feat_ * mask - feat_sub_.detach()*mask) ** 2
+        hc_loss *= delta_coef
+        self.assertTrue(torch.allclose(hc_loss, loss))
+        network._hook_features_model.clear()
+        network._hook_features_submodel.clear()
 
     def test_distillation_loss_weights1(self):
         '''
