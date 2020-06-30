@@ -18,7 +18,7 @@ cfg.TRAIN = {
     "num_save_iter": 2e2,
     "optimizer_dict":{
         "type": "adam",
-        "init_lr": 1e-3,
+        "init_lr": 1e-4,
         "weight_decay": 0,
     },
     "lr_scheduler_dict":{
@@ -165,11 +165,7 @@ cfg.NETWORK = {
         "ckpt_path": "saved_weights/incdet-saveweights/IncDetCar-2000.tckpt",
         "num_classes": 1,
         "num_anchor_per_loc": 2,
-        "partially_load_params": [
-            "rpn.conv_cls.weight", "rpn.conv_cls.bias",
-            "rpn.conv_box.weight", "rpn.conv_box.bias",
-            "rpn.conv_dir_cls.weight", "rpn.conv_dir_cls.bias",
-        ],
+        "partially_load_params": [],
         "ignore_params": []
     },
     "@voxel_encoder_dict": {
