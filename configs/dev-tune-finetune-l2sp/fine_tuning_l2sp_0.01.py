@@ -18,7 +18,7 @@ cfg.TRAIN = {
     "num_save_iter": 2e2,
     "optimizer_dict":{
         "type": "adam",
-        "init_lr": 1e-2,
+        "init_lr": 2e-3,
         "weight_decay": 0,
     },
     "lr_scheduler_dict":{
