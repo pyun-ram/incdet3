@@ -81,7 +81,7 @@ cfg.TARGETASSIGNER = {
 cfg.TRAINDATA = {
     "dataset": "carla", # carla
     "training": True,
-    "batch_size": 3,
+    "batch_size": 2,
     "num_workers": 3,
     "feature_map_size": [1, 200, 176],
     "@root_path": "/usr/app/data/CARLA_MULTI/training/",
