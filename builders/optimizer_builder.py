@@ -90,9 +90,11 @@ def build_lr_scheduler(optimizer, lr_scheduler_cfg):
 
 def build(net,
           optimizer_cfg,
-          lr_scheduler_cfg):
+          lr_scheduler_cfg,
+          start_iter=0):
     optimizer = build_optimizer(net, optimizer_cfg)
     lr_scheduler = build_lr_scheduler(optimizer, lr_scheduler_cfg)
+    lr_scheduler.last_epoch = start_iter-1
     return optimizer, lr_scheduler
 
 if __name__ == "__main__":

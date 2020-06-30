@@ -62,7 +62,8 @@ def setup_cores(cfg, mode):
         optimizer, lr_scheduler = build_optimizer_and_lr_scheduler(
             net=network,
             optimizer_cfg=cfg.TRAIN["optimizer_dict"],
-            lr_scheduler_cfg=cfg.TRAIN["lr_scheduler_dict"])
+            lr_scheduler_cfg=cfg.TRAIN["lr_scheduler_dict"],
+            start_iter=network.get_global_step())
     else:
         # build dataloader_train
         voxelizer = build_voxelizer(cfg.VOXELIZER)
