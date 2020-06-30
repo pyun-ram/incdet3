@@ -7,15 +7,15 @@ cfg = edict()
 cfg.TASK = {
     "valid_range": [-35.2, -40, -1.5, 35.2, 40, 2.6],
     "total_training_steps": 2e3,
-    "continue_training_steps": 1e3
+    "continue_training_steps": 2e3
 }
 
 cfg.TRAIN = {
     "train_iter": (cfg.TASK["total_training_steps"] +
                    cfg.TASK["continue_training_steps"]),
     "num_log_iter": 10,
-    "num_val_iter": 1e2,
-    "num_save_iter": 1e2,
+    "num_val_iter": 2e2,
+    "num_save_iter": 2e2,
     "optimizer_dict":{
         "type": "adam",
         "init_lr": 1e-4,
