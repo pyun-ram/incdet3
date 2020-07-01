@@ -55,8 +55,8 @@ cfg.TARGETASSIGNER = {
             "@anchor_ranges": cfg.TASK["valid_range"].copy(), # TBD in modify_cfg(cfg)
             "@sizes": [1.6, 3.9, 1.56], # wlh
             "@rotations": [0, 1.57],
-            "@match_threshold": 0.01,
-            "@unmatch_threshold": 0.01,
+            "@match_threshold": 0.6,
+            "@unmatch_threshold": 0.45,
         },
         "SimilarityCalculator": {
             "type": "NearestIoUSimilarity"
@@ -154,12 +154,12 @@ cfg.NETWORK = {
         "ckpt_path": "saved_weights/incdet-saveweights/IncDetCar-2000.tckpt",
         "num_classes": 1,
         "num_anchor_per_loc": 2,
-        "partially_load_params": [],
-        "ignore_params": [
+        "partially_load_params": [
             "rpn.conv_cls.weight", "rpn.conv_cls.bias",
             "rpn.conv_box.weight", "rpn.conv_box.bias",
             "rpn.conv_dir_cls.weight", "rpn.conv_dir_cls.bias",
-        ]
+        ],
+        "ignore_params": []
     },
     "@sub_model_resume_dict": {
         "ckpt_path": "saved_weights/incdet-saveweights/IncDetCar-2000.tckpt",
@@ -206,7 +206,7 @@ cfg.NETWORK = {
     "@pos_cls_weight": 1.0,
     "@neg_cls_weight": 1.0,
     "@l2sp_alpha_coef": 0.2,
-    "@delta_coef": 0.1,
+    "@delta_coef": 1.0,
     "@distillation_loss_cls_coef": 1.0,
     "@distillation_loss_reg_coef": 1.0,
     "@num_biased_select": 64,
@@ -239,11 +239,11 @@ cfg.NETWORK = {
             "@codewise": True,
         },
     },
-    "@hook_layers":  ["rpn.deblocks.0.2"],
+    "@hook_layers":  ["rpn.blocks.0.3.bn2"],
     "@distillation_mode": ["delta"],
     "@bool_reuse_anchor_for_cls": False,
     "@bool_biased_select_with_submodel": True,
-    "@bool_delta_use_mask": True,
+    "@bool_delta_use_mask": False,
     "@bool_oldclassoldanchor_predicts_only": False,
     "@post_center_range": cfg.TASK["valid_range"].copy(),
     "@nms_score_thresholds": [0.3],
