@@ -813,7 +813,7 @@ class Network(nn.Module):
         return mask
 
     def _compute_distillation_loss(self, preds_dict, preds_dict_sub):
-        def _compute_weights(cls_preds, num_select=64):
+        def _compute_weights(cls_preds, num_select=32):
             '''
             @cls_preds: [batch_size, num_anchor, H, W, num_classes] logits
             -> weights [batch_size, num_anchor]
@@ -848,9 +848,6 @@ class Network(nn.Module):
             weights = _compute_weights(
                 cls_output, num_select=self._num_biased_select)
         batch_size = preds_dict["cls_preds"].shape[0]
-        Logger.log_txt(bcolors.WARNING +
-            "Network._compute_distillation_loss() num_select needs to tune." +
-            bcolors.ENDC)
         cls_loss = self._distillation_loss_cls_ftor(
             cls_output, cls_target, weights=weights)
         reg_output = (preds_dict["box_preds"]
