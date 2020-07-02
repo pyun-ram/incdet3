@@ -206,10 +206,10 @@ cfg.NETWORK = {
     "@pos_cls_weight": 1.0,
     "@neg_cls_weight": 1.0,
     "@l2sp_alpha_coef": 0.2,
-    "@delta_coef": 0.1,
-    "@distillation_loss_cls_coef": 1.0,
-    "@distillation_loss_reg_coef": 2.0,
-    "@num_biased_select": 64,
+    "@delta_coef": 0.01,
+    "@distillation_loss_cls_coef": 0.1,
+    "@distillation_loss_reg_coef": 0.2,
+    "@num_biased_select": 32,
     "@threshold_delta_fgmask": 0.5,
     "@loss_dict": {
         "ClassificationLoss":{
