@@ -81,7 +81,7 @@ cfg.TARGETASSIGNER = {
 cfg.TRAINDATA = {
     "dataset": "carla", # carla
     "training": True,
-    "batch_size": 3,
+    "batch_size": 2,
     "num_workers": 3,
     "feature_map_size": [1, 200, 176],
     "@root_path": "/usr/app/data/CARLA_MULTI/training/",
@@ -197,7 +197,7 @@ cfg.NETWORK = {
         "@box_code_size": 7, # TBD
         "@num_direction_bins": 2,
     },
-    "@training_mode": "fine_tuning",
+    "@training_mode": "lwf",
     "@is_training": None, #TBD in main.py
     "@cls_loss_weight": 1.0,
     "@loc_loss_weight": 2.0,
@@ -206,9 +206,9 @@ cfg.NETWORK = {
     "@pos_cls_weight": 1.0,
     "@neg_cls_weight": 1.0,
     "@l2sp_alpha_coef": 0.2,
-    "@delta_coef": 1.0,
+    "@delta_coef": 0.1,
     "@distillation_loss_cls_coef": 1.0,
-    "@distillation_loss_reg_coef": 1.0,
+    "@distillation_loss_reg_coef": 2.0,
     "@num_biased_select": 64,
     "@threshold_delta_fgmask": 0.5,
     "@loss_dict": {
@@ -239,11 +239,11 @@ cfg.NETWORK = {
             "@codewise": True,
         },
     },
-    "@hook_layers":  ["rpn.blocks.0.4.conv2", "rpn.blocks.0.3.conv2"],
-    "@distillation_mode": ["delta"],
+    "@hook_layers":  ["rpn.deblocks.0.2"],
+    "@distillation_mode": ["distillation_loss"],
     "@bool_reuse_anchor_for_cls": False,
     "@bool_biased_select_with_submodel": True,
-    "@bool_delta_use_mask": True,
+    "@bool_delta_use_mask": False,
     "@bool_oldclassoldanchor_predicts_only": False,
     "@post_center_range": cfg.TASK["valid_range"].copy(),
     "@nms_score_thresholds": [0.3],
