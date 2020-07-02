@@ -209,7 +209,7 @@ cfg.NETWORK = {
     "@delta_coef": 0.1,
     "@distillation_loss_cls_coef": 1.0,
     "@distillation_loss_reg_coef": 2.0,
-    "@num_biased_select": 64,
+    "@num_biased_select": 32,
     "@threshold_delta_fgmask": 0.5,
     "@loss_dict": {
         "ClassificationLoss":{
