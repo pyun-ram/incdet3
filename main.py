@@ -22,6 +22,8 @@ from det3.ops import write_pkl
 from det3.utils.utils import proc_param, is_param
 from det3.utils.log_tool import Logger
 from det3.utils.import_tool import load_module
+from det3.dataloader.carladata import CarlaData, CarlaObj
+from det3.visualizer.vis import BEVImage
 from incdet3.models.model import Network
 from incdet3.builders.voxelizer_builder import build as build_voxelizer
 from incdet3.builders.target_assigner_builder import build as build_target_assigner
@@ -164,7 +166,7 @@ def val_one_epoch(model, dataloader):
     }
     return info
 
-def log_val_info(info, itr):
+def log_val_info(info, itr, vis_param_dict=None):
     num_iter = info["num_iter"]
     detections = info["detections"]
     eval_res = info["eval_res"]
@@ -180,6 +182,43 @@ def log_val_info(info, itr):
     write_pkl(detections, os.path.join(log_val_dir, "val_detections.pkl"))
     write_pkl(eval_res, os.path.join(log_val_dir, "val_eval_res.pkl"))
     Logger().log_txt(str(eval_res['results']['carla']))
+    num_vis = 1 if len(detections) < 10 else 10
+    interval = int(len(detections)/ 10)
+    for idx in [i*interval for i in range(num_vis)]:
+        detection = detections[idx]
+        tag = detection['metadata']['tag']
+        vis_img = vis_fn(idx=tag,
+            detection=detection,
+            data_dir=vis_param_dict["data_dir"],
+            x_range=vis_param_dict["x_range"],
+            y_range=vis_param_dict["y_range"],
+            grid_size=vis_param_dict["grid_size"])
+        Logger().log_tsbd_img("val/detections", vis_img.data, num_iter)
+
+def vis_fn(data_dir,
+    idx,
+    detection,
+    x_range=(-35.2, 35.2),
+    y_range=(-40, 40),
+    grid_size=(0.1, 0.1)):
+    itm = detection
+    lidar = "velo_top"
+    pc_dict, label, calib = CarlaData(data_dir, idx).read_data()
+    pc = calib.lidar2imu(pc_dict[lidar][:, :3], key=f"Tr_imu_to_{lidar}")
+    bevimg = BEVImage(x_range, y_range, grid_size)
+    bevimg.from_lidar(pc)
+    for obj in label.data:
+        bevimg.draw_box(obj, calib, bool_gt=True)
+    box3d_lidar = itm["box3d_lidar"]
+    score = itm["scores"]
+    for box3d_lidar_, score_ in zip(box3d_lidar, score):
+        x, y, z, w, l, h, ry = box3d_lidar_
+        obj = CarlaObj()
+        obj.x, obj.y, obj.z = x, y, z
+        obj.w, obj.l, obj.h = w, l, h
+        obj.ry = ry
+        bevimg.draw_box(obj, calib, bool_gt=False, width=2)
+    return bevimg
 
 def test_one_epoch(model, dataloader):
     info = val_one_epoch(model, dataloader)
@@ -236,7 +275,13 @@ def train(cfg):
             print(f"Estimated time remaining: {int(ert / 60):d} min {int(ert % 60):d} s")
         if model.get_global_step() % num_val_iter == 0 or model.get_global_step() >= max_iter:
             val_info = val_one_epoch(model, dataloader_val)
-            log_val_info(val_info, model.get_global_step())
+            log_val_info(val_info, model.get_global_step(),
+                vis_param_dict={
+                    "data_dir": cfg.VALDATA["@root_path"],
+                    "x_range": (cfg.TASK["valid_range"][0], cfg.TASK["valid_range"][3]),
+                    "y_range": (cfg.TASK["valid_range"][1], cfg.TASK["valid_range"][4]),
+                    "gird_size": (0.1, 0.1)
+                })
     Logger.log_txt("Training DONE!")
 
 def test(cfg):
