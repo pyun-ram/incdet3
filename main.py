@@ -280,7 +280,7 @@ def train(cfg):
                     "data_dir": cfg.VALDATA["@root_path"],
                     "x_range": (cfg.TASK["valid_range"][0], cfg.TASK["valid_range"][3]),
                     "y_range": (cfg.TASK["valid_range"][1], cfg.TASK["valid_range"][4]),
-                    "gird_size": (0.1, 0.1)
+                    "grid_size": (0.1, 0.1)
                 })
     Logger.log_txt("Training DONE!")
 
