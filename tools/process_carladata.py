@@ -1,6 +1,7 @@
 '''
 This script post-processes the collected Carla data.
 1) Rearrange the collected Carla data
+python3 tools/process_carladata.py --data-dir /usr/app/data
 '''
 import argparse
 import os

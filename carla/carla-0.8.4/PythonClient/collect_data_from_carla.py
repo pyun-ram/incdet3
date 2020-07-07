@@ -494,7 +494,8 @@ class CarlaGame(object):
 
 					# save images
 					elif re.match('image_2', name):
-						measurement.save_to_disk(filename)
+						# measurement.save_to_disk(filename)
+						pass
 
 				# filename = "{}/episode_{:04d}/{}/{:06d}".format(cfg.carla_task_dick["SAVE_FOLD"], epoch, 'velo_fused', frame)
 				# np.save("{}.npy".format(filename), point_cloud_fused)

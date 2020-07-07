@@ -5,7 +5,7 @@ Copyright 2018 - 2019 RAM-Lab, RAM-Lab
 Note: Create Data for 3D object detection. It creates info files and db files for CARLA and WAYMO dataset.
 Script: python3 tools/create_data.py \
             --dataset carla \
-            --data-dir /usr/app/data/CARLA
+            --data-dir /usr/app/data/CARLA-TOWN01CAR
         python3 tools/create_data.py \
             --dataset waymo \
             --data-dir /usr/app/data/WAYMO/
@@ -256,10 +256,10 @@ def main(args):
     assert data_dir.exists()
 
     if dataset == "carla":
-        create_info_file(root_dir=str(data_dir/"training"),
-                         idx_path=str(data_dir/"split_index"/"dev.txt"),
-                         save_path=str(data_dir/"CARLA_infos_dev.pkl"),
-                         dataset=dataset)
+        # create_info_file(root_dir=str(data_dir/"training"),
+        #                  idx_path=str(data_dir/"split_index"/"dev.txt"),
+        #                  save_path=str(data_dir/"CARLA_infos_dev.pkl"),
+        #                  dataset=dataset)
         create_info_file(root_dir=str(data_dir/"training"),
                          idx_path=str(data_dir/"split_index"/"train.txt"),
                          save_path=str(data_dir/"CARLA_infos_train.pkl"),
