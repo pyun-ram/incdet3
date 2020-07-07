@@ -127,6 +127,7 @@ class Test_build_model_and_init(unittest.TestCase):
                 "name": Test_build_model_and_init.name_template
             }
             model = Network._build_model_and_init(**params).cuda()
+            model.eval()
             self.assertTrue(all([itm in model.keys() for itm in ["vfe_layer", "middle_layer", "rpn"]]))
             self.assertTrue(model.rpn.__class__.__name__ == rpn_name)
             data = load_pickle("./unit_tests/data/test_build_model_and_init_data.pkl")
@@ -151,7 +152,7 @@ class Test_build_model_and_init(unittest.TestCase):
                 == network_cfg["RPN"]["@num_direction_bins"])
             gt = load_pickle(f"unit_tests/data/test_build_model_and_init_output_{rpn_name}.pkl")
             for k, v in preds_dict.items():
-                self.assertTrue(torch.all(torch.eq(v, gt[k])))
+                self.assertTrue(torch.allclose(v, gt[k], atol=1e-9, rtol=1e-4))
 
     def test_multiclasses_noresume(self):
         '''
@@ -217,6 +218,7 @@ class Test_build_model_and_init(unittest.TestCase):
                 "name": Test_build_model_and_init.name_template
             }
             model = Network._build_model_and_init(**params).cuda()
+            model.eval()
             self.assertTrue(all([itm in model.keys() for itm in ["vfe_layer", "middle_layer", "rpn"]]))
             self.assertTrue(model.rpn.__class__.__name__ == rpn_name)
             data = load_pickle("./unit_tests/data/test_build_model_and_init_data.pkl")
@@ -241,7 +243,7 @@ class Test_build_model_and_init(unittest.TestCase):
                 == network_cfg["RPN"]["@num_direction_bins"])
             gt = load_pickle(f"unit_tests/data/test_build_model_and_init_output_{rpn_name}_3.pkl")
             for k, v in preds_dict.items():
-                self.assertTrue(torch.all(torch.eq(v, gt[k])))
+                self.assertTrue(torch.allclose(v, gt[k], atol=1e-9, rtol=1e-4))
 
     def test_multiclasses_resume2(self):
         '''
@@ -268,6 +270,7 @@ class Test_build_model_and_init(unittest.TestCase):
                 "name": Test_build_model_and_init.name_template
             }
             model = Network._build_model_and_init(**params).cuda()
+            model.eval()
             self.assertTrue(all([itm in model.keys() for itm in ["vfe_layer", "middle_layer", "rpn"]]))
             self.assertTrue(model.rpn.__class__.__name__ == rpn_name)
             data = load_pickle("./unit_tests/data/test_build_model_and_init_data.pkl")
@@ -298,7 +301,7 @@ class Test_build_model_and_init(unittest.TestCase):
             est["box_preds"] = preds_dict["box_preds"][:, :num_old_anchor_per_loc, ...]
             est["dir_cls_preds"] = preds_dict["dir_cls_preds"][:, :num_old_anchor_per_loc, ...]
             for k, v in est.items():
-                self.assertTrue(torch.all(torch.eq(v, gt[k])))
+                self.assertTrue(torch.allclose(v, gt[k], atol=1e-9, rtol=1e-4))
 
     def test_multiclasses_resume3(self):
         '''
@@ -325,6 +328,7 @@ class Test_build_model_and_init(unittest.TestCase):
                 "name": Test_build_model_and_init.name_template
             }
             model = Network._build_model_and_init(**params).cuda()
+            model.eval()
             self.assertTrue(all([itm in model.keys() for itm in ["vfe_layer", "middle_layer", "rpn"]]))
             self.assertTrue(model.rpn.__class__.__name__ == rpn_name)
             data = load_pickle("./unit_tests/data/test_build_model_and_init_data.pkl")
@@ -355,7 +359,7 @@ class Test_build_model_and_init(unittest.TestCase):
             est["box_preds"] = preds_dict["box_preds"][:, :num_old_anchor_per_loc, ...]
             est["dir_cls_preds"] = preds_dict["dir_cls_preds"][:, :num_old_anchor_per_loc, ...]
             for k, v in est.items():
-                self.assertTrue(torch.all(torch.eq(v, gt[k])))
+                self.assertTrue(torch.allclose(v, gt[k], atol=1e-9, rtol=1e-4))
 
 class Test_freeze_model_and_detach_variables(unittest.TestCase):
     network_cfg_template =  {
