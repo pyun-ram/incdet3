@@ -301,7 +301,7 @@ class Test_build_model_and_init(unittest.TestCase):
             est["box_preds"] = preds_dict["box_preds"][:, :num_old_anchor_per_loc, ...]
             est["dir_cls_preds"] = preds_dict["dir_cls_preds"][:, :num_old_anchor_per_loc, ...]
             for k, v in est.items():
-                self.assertTrue(torch.all(torch.eq(v, gt[k])))
+                self.assertTrue(torch.allclose(v, gt[k], atol=1e-9, rtol=1e-4))
 
     def test_multiclasses_resume3(self):
         '''
