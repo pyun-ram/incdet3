@@ -315,7 +315,7 @@ def load_config_file(cfg_path,
     else:
         cfg = load_module(cfg_path, "cfg")
         check_cfg = load_module(cfg_path, "check_cfg")
-        modify_cfg = load_module(bkup_path, "modify_cfg")
+        modify_cfg = load_module(cfg_path, "modify_cfg")
     modify_cfg(cfg)
     assert check_cfg(cfg)
     return cfg
