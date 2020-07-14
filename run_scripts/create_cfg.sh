@@ -1,4 +1,4 @@
-!/bin/bash
+#!/bin/bash
 # after il (target dataset) (best model)
 for i in {0..4}
 do
