@@ -156,7 +156,7 @@ def make_carla_settings(args):
 		NumberOfVehicles=300, # 15
 		NumberOfPedestrians=num_of_ped, # 30
 		WeatherId=random.choice([1, 3, 7, 8, 14]),
-		DisableTwoWheeledVehicles=True,
+		DisableTwoWheeledVehicles=not args.with_cyc,
 		QualityLevel=args.quality_level)
 	settings.randomize_seeds()
 
@@ -729,6 +729,10 @@ def main():
 		'--with-ped',
 		action='store_true',
 		help='enable pedestrians')
+	argparser.add_argument(
+		'--with-cyc',
+		action='store_true',
+		help='enable cyclists')
 	args = argparser.parse_args()
 
 	log_level = logging.DEBUG if args.debug else logging.INFO
