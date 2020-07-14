@@ -28,7 +28,7 @@ ENTRYPOINT [ "/usr/bin/tini", "--" ]
 CMD [ "/bin/bash" ]
 # install pytorch 1.4
 RUN conda install pytorch==1.4 torchvision==0.5.0 cudatoolkit=9.2 -c pytorch
-RUN conda install -c open3d-admin open3d==0.10.0
+RUN conda install -c open3d-admin open3d==0.9.0
 RUN conda install -c numba numba
 RUN conda install -c conda-forge tensorboardX==2.0 easydict==1.9 tqdm numpy
 RUN apt-get update && apt-get -y install libgl1-mesa-glx
