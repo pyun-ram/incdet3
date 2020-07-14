@@ -259,7 +259,12 @@ class CarlaGame(object):
 		self._map_view = None
 		self._is_on_reverse = False
 		self._city_name = args.map_name
-		self._map = CarlaMap(self._city_name, 0.1643, 50.0) if self._city_name is not None else None
+		if self._city_name in ["Town01", "Town02"]:
+			self._map = CarlaMap(self._city_name, 0.1643, 50.0) if self._city_name is not None else None
+		elif self._city_name == "Town03":
+			self._map = CarlaMap("Town01", 0.1643, 50.0) if self._city_name is not None else None
+		else:
+			raise NotImplementedError
 		self._map_shape = self._map.map_image.shape if self._city_name is not None else None
 		self._map_view = self._map.get_map(WINDOW_HEIGHT) if self._city_name is not None else None
 		self._position = None
@@ -322,7 +327,22 @@ class CarlaGame(object):
 		self._carla_settings.WeatherId = 1
 		scene = self.client.load_settings(self._carla_settings)
 		number_of_player_starts = len(scene.player_start_spots)
-		player_start = np.random.randint(number_of_player_starts)
+		if self._city_name == "Town01":
+			candidate_position = [0,1,2,3,4,5,6,7,8,9,11,12,13,14,27,26,29,28,
+			30,31,33,34,35,36,37,38,39,40,41,42,44,45,46,47,48,49,50,51,52,53,
+			55,56,18,16,17,15,90,91,92,93,139,138,142,144,145,146]
+			player_start = np.random.randint(low=0, high=len(candidate_position))
+			player_start = candidate_position[player_start]
+		elif self._city_name == "Town02":
+			player_start = np.random.randint(number_of_player_starts)
+		elif self._city_name == "Town03":
+			candidate_position = [94,95,97,98,99,100,107,96,120,119,121,122,116,
+			114,115,112,113,110,111,105,108,10,21,103,104,101,102,78,79,80,81,
+			72,73,74,75,107,96]
+			player_start = np.random.randint(low=0, high=len(candidate_position))
+			player_start = candidate_position[player_start]
+		else:
+			raise NotImplementedError
 		print('Starting new episode...')
 		self.client.start_episode(player_start) # default: 131
 		print('player start: ', player_start)
