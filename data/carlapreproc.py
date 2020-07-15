@@ -220,9 +220,13 @@ def prep_pointcloud(input_dict,
                     for k, v in pc_dict_Flidar.items()}
     pc = get_pc_from_dict(pc_dict_FIMU)
 
+    label = label_filtering(pc=pc,
+                            calib=gt_calib,
+                            label=gt_label,
+                            filter_label_dict=filter_label_dict)
     label, calib, pc = db_sampling(pc=pc,
                                    gt_calib=gt_calib,
-                                   gt_label=gt_label,
+                                   gt_label=label,
                                    training=training,
                                    db_sampler=None)
     label, pc = augmenting(pc=pc,
