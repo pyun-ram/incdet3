@@ -3,10 +3,10 @@
  Author: Peng YUN (pyun@ust.hk)
  Copyright 2018-2020 Peng YUN, RAM-Lab, HKUST
  python3 tools/compute_mAP.py \
-    --log-dir logs/incdet3-carlasmall-July4/July04-expcarlasmall-finetune-cv3 \
-    --val-pkl-path /usr/app/data/CARLA_EPISODE2_CARPED/CARLA_infos_val_3.pkl \
+    --log-dir logs/July14-expcarlamore/July14-expcarlamore-lwf-cv0 \
+    --val-pkl-path /usr/app/data/CARLA-TOWN01CARPEDCYC/CARLA_infos_val0.pkl \
     --valid-range -35.2 -40 -1.5 35.2 40 2.6 \
-    --valid-classes Car,Pedestrian
+    --valid-classes Car,Pedestrian,Cyclist
 
 '''
 import argparse
@@ -17,7 +17,8 @@ import os
 
 g_config_dict = {
     "Car": "3d@0.50",
-    "Pedestrian": "3d@0.25"
+    "Pedestrian": "3d@0.25",
+    "Cyclist": "3d@0.25"
 }
 
 def main(log_dir, val_pkl_path, valid_range, valid_classes):
@@ -31,6 +32,7 @@ def main(log_dir, val_pkl_path, valid_range, valid_classes):
         ## accumulate
         for obj in label_.data:
             acc_dict[obj.type] += 1
+    print(acc_dict)
     # get all eval_pkl_list
     global g_config_dict
     eval_pkl_list = glob(os.path.join(log_dir, '*00'))
