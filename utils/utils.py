@@ -82,3 +82,17 @@ class bcolors:
     ENDC = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
+
+nusc_cls2color = {
+    "car": "yellow",
+    "truck": "brown",
+    "bus": "purple",
+    "trailer": "white",
+    "construction_vehicle": "blue",
+    "pedestrian": "green",
+    "barrier": "pink",
+    "traffic_cone": "red",
+    "bicycle": "orange",
+    "motorcycle": "cyan",
+    "default": "magenta",
+}

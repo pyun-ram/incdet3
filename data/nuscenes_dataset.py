@@ -204,6 +204,7 @@ class NuScenesDataset(Dataset):
         calib.data = {"Tr_imu_to_velo_top": np.eye(4).astype(np.float32)}
         res["calib"] = calib
         label = CarlaLabel(None)
+        label.current_frame = "IMU"
         for box, name in zip(input_dict["lidar"]["annotations"]["boxes"],
                 input_dict["lidar"]["annotations"]["names"]):
             xyz_FIMU = box[:3]
@@ -481,7 +482,7 @@ class NuScenesDataset(Dataset):
             },
         }
 
-    def evaluation(self, detections, output_dir):
+    def evaluation(self, detections, output_dir="./"):
         """kitti evaluation is very slow, remove it.
         """
         # res_kitti = self.evaluation_kitti(detections, output_dir)

@@ -8,11 +8,16 @@ from det3.utils.utils import is_param, proc_param
 from incdet3.data.carlapreproc import anchor_creating as anchor_creating_carla
 from incdet3.data.carlapreproc import prep_pointcloud as prep_func_carla
 from incdet3.data.carladataset import CarlaDataset
+from incdet3.data.nuscenes_dataset import NuScenesDataset
 
 def create_anchor_cache(target_assigner,
     feature_map_size,
     dataset_name):
     if dataset_name == "carla":
+        return anchor_creating_carla(target_assigner,
+            feature_map_size,
+            anchor_cache=None)
+    elif dataset_name == "nusc":
         return anchor_creating_carla(target_assigner,
             feature_map_size,
             anchor_cache=None)
@@ -31,6 +36,8 @@ def build_prep_func(voxelizer,
     params["anchor_cache"] = anchor_cache
     if dataset_name == "carla":
         prep_cfg = partial(prep_func_carla, **params)
+    elif dataset_name == "nusc":
+        prep_cfg = partial(prep_func_carla, **params)
     else:
         raise NotImplementedError
     return prep_cfg
@@ -44,6 +51,8 @@ def build_dataset(
     params["prep_func"] = prep_func
     if dataset_name == "carla":
         dataset = CarlaDataset(**params)
+    elif dataset_name == "nusc":
+        dataset = NuScenesDataset(**params)
     else:
         raise NotImplementedError
     return dataset

@@ -29,6 +29,7 @@ from incdet3.builders.voxelizer_builder import build as build_voxelizer
 from incdet3.builders.target_assigner_builder import build as build_target_assigner
 from incdet3.builders.dataloader_builder import build as build_dataloader, example_convert_to_torch
 from incdet3.builders.optimizer_builder import build as build_optimizer_and_lr_scheduler
+from incdet3.utils.utils import nusc_cls2color
 
 g_log_dir, g_save_dir = None, None
 g_since = None
@@ -55,6 +56,7 @@ def setup_cores(cfg, mode):
         dataloader_test = None
         # build model
         param = cfg.NETWORK
+        param["@middle_layer_dict"]["@output_shape"] = [1] + voxelizer.grid_size[::-1].tolist() + [16]
         param["@is_training"] = True
         param["@box_coder"] = target_assigner.box_coder
         param = {proc_param(k): v
@@ -84,6 +86,7 @@ def setup_cores(cfg, mode):
         param = cfg.NETWORK
         param["@is_training"] = False
         param["@box_coder"] = target_assigner.box_coder
+        param["@middle_layer_dict"]["@output_shape"] = [1] + voxelizer.grid_size[::-1].tolist() + [16]
         param = {proc_param(k): v
             for k, v in param.items() if is_param(k)}
         network = Network(**param).cuda()
@@ -181,19 +184,68 @@ def log_val_info(info, itr, vis_param_dict=None):
     os.makedirs(log_val_dir, exist_ok=True)
     write_pkl(detections, os.path.join(log_val_dir, "val_detections.pkl"))
     write_pkl(eval_res, os.path.join(log_val_dir, "val_eval_res.pkl"))
-    Logger().log_txt(str(eval_res['results']['carla']))
-    num_vis = 1 if len(detections) < 10 else 10
-    interval = int(len(detections)/ 10)
-    for idx in [i*interval for i in range(num_vis)]:
-        detection = detections[idx]
-        tag = detection['metadata']['tag']
-        vis_img = vis_fn(idx=tag,
-            detection=detection,
-            data_dir=vis_param_dict["data_dir"],
-            x_range=vis_param_dict["x_range"],
-            y_range=vis_param_dict["y_range"],
-            grid_size=vis_param_dict["grid_size"])
-        Logger().log_tsbd_img("val/detections", vis_img.data, num_iter)
+    if "carla" in eval_res['results'].keys():
+        Logger().log_txt(str(eval_res['results']['carla']))
+        num_vis = 1 if len(detections) < 10 else 10
+        interval = int(len(detections)/ 10)
+        for idx in [i*interval for i in range(num_vis)]:
+            detection = detections[idx]
+            tag = detection['metadata']['tag']
+            vis_img = vis_fn(idx=tag,
+                detection=detection,
+                data_dir=vis_param_dict["data_dir"],
+                x_range=vis_param_dict["x_range"],
+                y_range=vis_param_dict["y_range"],
+                grid_size=vis_param_dict["grid_size"])
+            Logger().log_tsbd_img("val/detections", vis_img.data, num_iter)
+    elif "nusc" in eval_res['results'].keys():
+        Logger().log_txt(str(eval_res['results']['nusc']))
+        num_vis = 1 if len(detections) < 10 else 10
+        interval = int(len(detections)/ 10)
+        for idx in [i*interval for i in range(num_vis)]:
+            detection = detections[idx]
+            vis_img = vis_fn_nusc(idx=idx,
+                detection=detection,
+                dataset=vis_param_dict["dataset"],
+                x_range=vis_param_dict["x_range"],
+                y_range=vis_param_dict["y_range"],
+                grid_size=vis_param_dict["grid_size"])
+            Logger().log_tsbd_img("val/detections", vis_img.data, num_iter)
+    else:
+        raise NotImplementedError
+
+def vis_fn_nusc(dataset,
+    idx,
+    detection,
+    x_range=(-35.2, 35.2),
+    y_range=(-40, 40),
+    grid_size=(0.1, 0.1)):
+    itm = detection
+    input_dict = dataset.get_sensor_data(idx)
+    input_dict = dataset._to_carlaloader(input_dict)
+    pc = input_dict["lidar"]["points"]["velo_top"]
+    label = input_dict["imu"]["label"]
+    calib = input_dict["calib"]
+    bevimg = BEVImage(x_range, y_range, grid_size)
+    bevimg.from_lidar(pc)
+    for obj in label.data:
+        bevimg.draw_box(obj, calib, bool_gt=True, width=3, text=obj.type)
+    box3d_lidar = itm["box3d_lidar"]
+    score = itm["scores"]
+    label_preds = itm["label_preds"]
+    for box3d_lidar_, label_pred_ in zip(box3d_lidar, label_preds):
+        label_pred_name = dataset._class_names[label_pred_]
+        if label_pred_name in nusc_cls2color.keys():
+            color = nusc_cls2color[label_pred_name]
+        else:
+            color = nusc_cls2color["default"]
+        x, y, z, w, l, h, ry = box3d_lidar_
+        obj = CarlaObj()
+        obj.x, obj.y, obj.z = x, y, z
+        obj.w, obj.l, obj.h = w, l, h
+        obj.ry = ry
+        bevimg.draw_box(obj, calib, bool_gt=False, width=2, c=color)
+    return bevimg
 
 def vis_fn(data_dir,
     idx,
@@ -280,7 +332,8 @@ def train(cfg):
                     "data_dir": cfg.VALDATA["@root_path"],
                     "x_range": (cfg.TASK["valid_range"][0], cfg.TASK["valid_range"][3]),
                     "y_range": (cfg.TASK["valid_range"][1], cfg.TASK["valid_range"][4]),
-                    "grid_size": (0.1, 0.1)
+                    "grid_size": (0.1, 0.1),
+                    "dataset": dataloader_val.dataset
                 })
     Logger.log_txt("Training DONE!")
 
