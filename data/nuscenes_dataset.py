@@ -64,6 +64,7 @@ class NuScenesDataset(Dataset):
                  prep_func=None,
                  num_point_features=None):
         self._root_path = Path(root_path)
+        self._info_path = info_path
         with open(info_path, 'rb') as f:
             data = pickle.load(f)
         self._nusc_infos = data["infos"]
@@ -446,7 +447,7 @@ class NuScenesDataset(Dataset):
         # why add \"{}\"? to support path with spaces.
         cmd = f"python {str(eval_main_file)} --root_path=\"{str(self._root_path)}\""
         cmd += f" --version={self.version} --eval_version={self.eval_version}"
-        cmd += f" --res_path=\"{str(res_path)}\" --eval_set={eval_set_map[self.version]}"
+        cmd += f" --res_path=\"{str(res_path)}\" --eval_set={self._info_path.split('/')[-1].split('.')[0].split('_')[-1]}"
         cmd += f" --output_dir=\"{output_dir}\""
         # use subprocess can release all nusc memory after evaluation
         subprocess.check_output(cmd, shell=True)

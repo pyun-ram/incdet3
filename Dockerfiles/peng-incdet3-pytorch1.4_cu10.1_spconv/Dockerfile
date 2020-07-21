@@ -31,6 +31,7 @@ RUN conda install pytorch==1.4 torchvision==0.5.0 cudatoolkit=10.1 -c pytorch
 RUN conda install -c open3d-admin open3d==0.9.0
 RUN conda install -c numba numba
 RUN conda install -c conda-forge tensorboardX==2.0 easydict==1.9 tqdm numpy
+RUN pip install nuscenes-devkit
 RUN apt-get update && apt-get -y install libgl1-mesa-glx
 
 RUN conda install -c conda-forge scikit-image shapely

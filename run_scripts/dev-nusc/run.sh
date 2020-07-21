@@ -4,3 +4,8 @@ python3 main.py \
     --tag incdet3-nusc \
     --cfg-path configs/dev-nusc/train_from_scratch_car.py \
     --mode train
+
+python3 main.py \
+    --tag incdet3-nusc \
+    --cfg-path configs/dev-nusc/train_from_scratch_car.py \
+    --mode test
