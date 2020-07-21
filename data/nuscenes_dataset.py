@@ -445,9 +445,13 @@ class NuScenesDataset(Dataset):
             json.dump(nusc_submissions, f)
         eval_main_file = Path(__file__).resolve().parent / "nusc_eval.py"
         # why add \"{}\"? to support path with spaces.
+        if self.version != "v1.0-trainval":
+            eval_set = f"{self.version.split('-')[0]}_{self._info_path.split('/')[-1].split('.')[0].split('_')[-1]}"
+        else:
+            eval_set = self._info_path.split('/')[-1].split('.')[0].split('_')[-1]
         cmd = f"python {str(eval_main_file)} --root_path=\"{str(self._root_path)}\""
         cmd += f" --version={self.version} --eval_version={self.eval_version}"
-        cmd += f" --res_path=\"{str(res_path)}\" --eval_set={self._info_path.split('/')[-1].split('.')[0].split('_')[-1]}"
+        cmd += f" --res_path=\"{str(res_path)}\" --eval_set={eval_set}"
         cmd += f" --output_dir=\"{output_dir}\""
         # use subprocess can release all nusc memory after evaluation
         subprocess.check_output(cmd, shell=True)
@@ -698,6 +702,12 @@ def _fill_trainval_infos(nusc,
     val_nusc_infos = []
     from pyquaternion import Quaternion
     for sample in prog_bar(nusc.sample):
+        if sample["scene_token"] in train_scenes:
+            pass
+        elif sample["scene_token"] in val_scenes:
+            pass
+        else:
+            continue
         lidar_token = sample["data"]["LIDAR_TOP"]
         cam_front_token = sample["data"]["CAM_FRONT"]
         sd_rec = nusc.get('sample_data', sample['data']["LIDAR_TOP"])
@@ -813,7 +823,7 @@ def create_nuscenes_infos(root_path, version="v1.0-trainval", max_sweeps=10):
     from nuscenes.nuscenes import NuScenes
     nusc = NuScenes(version=version, dataroot=root_path, verbose=True)
     from nuscenes.utils import splits
-    available_vers = ["v1.0-trainval", "v1.0-test", "v1.0-mini"]
+    available_vers = ["v1.0-trainval", "v1.0-test", "v1.0-mini", "incdet3-trainval", "incdet3eval-val"]
     assert version in available_vers
     if version == "v1.0-trainval":
         train_scenes = splits.train
@@ -824,6 +834,12 @@ def create_nuscenes_infos(root_path, version="v1.0-trainval", max_sweeps=10):
     elif version == "v1.0-mini":
         train_scenes = splits.mini_train
         val_scenes = splits.mini_val
+    elif version == "incdet3-trainval":
+        train_scenes = splits.incdet3_train
+        val_scenes = splits.incdet3_val
+    elif version == "incdet3eval-val":
+        train_scenes = []
+        val_scenes = splits.incdet3eval_val
     else:
         raise ValueError("unknown")
     test = "test" in version

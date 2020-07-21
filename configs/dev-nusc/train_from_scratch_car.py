@@ -12,7 +12,7 @@ cfg.TASK = {
 cfg.TRAIN = {
     "train_iter": cfg.TASK["total_training_steps"],
     "num_log_iter": 20,
-    "num_val_iter": 1,
+    "num_val_iter": 1e2,
     "num_save_iter": 1e3,
     "optimizer_dict":{
         "type": "adam",
@@ -67,8 +67,8 @@ cfg.TRAINDATA = {
     "batch_size": 4,
     "num_workers": 4,
     "feature_map_size": [1, 248, 248],
-    "@root_path": "/usr/app/data/Nuscenes/training/",
-    "@info_path": "/usr/app/data/Nuscenes/training/infos_train.pkl",
+    "@root_path": "/usr/app/data/Nuscenes-Mini/training/",
+    "@info_path": "/usr/app/data/Nuscenes-Mini/training/infos_train.pkl",
     "@class_names": cfg.TARGETASSIGNER["@classes"].copy(),
     "prep": {
         "@training": True,
@@ -102,8 +102,8 @@ cfg.VALDATA = {
     "batch_size": 1,
     "num_workers": 1,
     "feature_map_size": [1, 248, 248],
-    "@root_path": "/usr/app/data/Nuscenes/training/",
-    "@info_path": "/usr/app/data/Nuscenes/training/infos_val.pkl",
+    "@root_path": "/usr/app/data/Nuscenes-Mini/training/",
+    "@info_path": "/usr/app/data/Nuscenes-Mini/training/infos_val.pkl",
     "@class_names": cfg.TARGETASSIGNER["@classes"].copy(),
     "prep": {
         "@training": False,
@@ -119,8 +119,8 @@ cfg.TESTDATA = {
     "batch_size": 1,
     "num_workers": 1,
     "feature_map_size": [1, 248, 248],
-    "@root_path": "/usr/app/data/Nuscenes/training/",
-    "@info_path": "/usr/app/data/Nuscenes/training/infos_val.pkl",
+    "@root_path": "/usr/app/data/Nuscenes-Mini/training/",
+    "@info_path": "/usr/app/data/Nuscenes-Mini/training/infos_val.pkl",
     "@class_names": cfg.TARGETASSIGNER["@classes"].copy(),
     "prep": {
         "@training": False,
@@ -133,7 +133,13 @@ cfg.TESTDATA = {
 cfg.NETWORK = {
     "@classes_target": ["car"],
     "@classes_source": None,
-    "@model_resume_dict": None,
+    "@model_resume_dict": {
+        "ckpt_path": "saved_weights/incdet3-nusc/IncDetMain-15000.tckpt",
+        "num_classes": 1,
+        "num_anchor_per_loc": 2,
+        "partially_load_params": [],
+        "ignore_params": []
+    },
     "@sub_model_resume_dict": None,
     "@voxel_encoder_dict": {
         "name": "SimpleVoxel",
