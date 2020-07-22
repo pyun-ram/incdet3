@@ -37,7 +37,7 @@ cfg.VOXELIZER = {
 cfg.TARGETASSIGNER = {
     "type": "TaskAssignerV1",
     "@classes": ["car", "pedestrian", "barrier", "truck", "traffic_cone",
-        "trailer", "construction_vehicle", "motorcycle", "bicycle", "bus"],
+        "trailer", "construction_vehicle", "motorcycle", "bicycle"],
     "@feature_map_sizes": None,
     "@positive_fraction": None,
     "@sample_size": 512,
@@ -119,7 +119,7 @@ cfg.TESTDATA = {
 
 cfg.NETWORK = {
     "@classes_target": ["car", "pedestrian", "barrier", "truck", "traffic_cone",
-        "trailer", "construction_vehicle", "motorcycle", "bicycle", "bus"],
+        "trailer", "construction_vehicle", "motorcycle", "bicycle"],
     "@classes_source": None,
     "@model_resume_dict": None,
     "@sub_model_resume_dict": None,

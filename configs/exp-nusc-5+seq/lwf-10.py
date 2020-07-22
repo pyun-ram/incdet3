@@ -6,11 +6,13 @@ cfg = edict()
 
 cfg.TASK = {
     "valid_range": [-40, -40, -5, 40, 40, 3],
-    "total_training_steps": 50e3,
+    "total_training_steps": 110e3,
+    "continue_training_steps": 15e3
 }
 
 cfg.TRAIN = {
-    "train_iter": cfg.TASK["total_training_steps"],
+    "train_iter": (cfg.TASK["total_training_steps"] +
+                   cfg.TASK["continue_training_steps"]),
     "num_log_iter": 40,
     "num_val_iter": 2e3,
     "num_save_iter": 2e3,
@@ -21,7 +23,8 @@ cfg.TRAIN = {
     },
     "lr_scheduler_dict":{
         "type": "StepLR",
-        "step_size": cfg.TASK["total_training_steps"] * 0.8,
+        "step_size": (cfg.TASK["total_training_steps"] +
+                      cfg.TASK["continue_training_steps"] * 0.8),
         "gamma": 0.1
     }
 }
@@ -36,8 +39,7 @@ cfg.VOXELIZER = {
 
 cfg.TARGETASSIGNER = {
     "type": "TaskAssignerV1",
-    "@classes": ["car", "pedestrian", "barrier", "truck", "traffic_cone",
-        "trailer", "construction_vehicle", "motorcycle", "bicycle", "bus"],
+    "@classes": ["car", "pedestrian", "barrier", "truck", "traffic_cone", "trailer", "construction_vehicle", "motorcycle", "bicycle", "bus"],
     "@feature_map_sizes": None,
     "@positive_fraction": None,
     "@sample_size": 512,
@@ -78,7 +80,7 @@ cfg.TRAINDATA = {
             # [min_x, min_y, min_z, max_x, max_y, max_z] FIMU
         },
         "@feature_map_size": None, # TBD in dataloader_builder.py
-        "@classes_to_exclude": []
+        "@classes_to_exclude": ["car", "pedestrian", "barrier", "truck", "traffic_cone", "trailer", "construction_vehicle", "motorcycle", "bicycle"]
     }
 }
 
@@ -118,11 +120,26 @@ cfg.TESTDATA = {
 }
 
 cfg.NETWORK = {
-    "@classes_target": ["car", "pedestrian", "barrier", "truck", "traffic_cone",
-        "trailer", "construction_vehicle", "motorcycle", "bicycle", "bus"],
-    "@classes_source": None,
-    "@model_resume_dict": None,
-    "@sub_model_resume_dict": None,
+    "@classes_target": ["car", "pedestrian", "barrier", "truck", "traffic_cone", "trailer", "construction_vehicle", "motorcycle", "bicycle", "bus"],
+    "@classes_source": ["car", "pedestrian", "barrier", "truck", "traffic_cone", "trailer", "construction_vehicle", "motorcycle", "bicycle"],
+    "@model_resume_dict": {
+        "ckpt_path": "saved_weights/July22-expnusc-5+seq-lwf-9/IncDetMain-110000.tckpt",
+        "num_classes": 9,
+        "num_anchor_per_loc": 18,
+        "partially_load_params": [
+            "rpn.conv_cls.weight", "rpn.conv_cls.bias",
+            "rpn.conv_box.weight", "rpn.conv_box.bias",
+            "rpn.conv_dir_cls.weight", "rpn.conv_dir_cls.bias",
+        ],
+        "ignore_params": []
+    },
+    "@sub_model_resume_dict": {
+        "ckpt_path": "saved_weights/July22-expnusc-5+seq-lwf-9/IncDetMain-110000.tckpt",
+        "num_classes": 9,
+        "num_anchor_per_loc": 18,
+        "partially_load_params": [],
+        "ignore_params": []
+    },
     "@voxel_encoder_dict": {
         "name": "SimpleVoxel",
         "@num_input_features": 4,
@@ -152,7 +169,7 @@ cfg.NETWORK = {
         "@box_code_size": 7, # TBD
         "@num_direction_bins": 2,
     },
-    "@training_mode": "train_from_scratch",
+    "@training_mode": "lwf",
     "@is_training": None, #TBD
     "@cls_loss_weight": 1.0,
     "@loc_loss_weight": 2.0,
@@ -164,7 +181,7 @@ cfg.NETWORK = {
     "@delta_coef": 0.01,
     "@distillation_loss_cls_coef": 0.1,
     "@distillation_loss_reg_coef": 0.2,
-    "@num_biased_select": 32,
+    "@num_biased_select": 64,
     "@threshold_delta_fgmask": 0.5,
     "@loss_dict": {
         "ClassificationLoss":{
@@ -195,8 +212,8 @@ cfg.NETWORK = {
         },
     },
     "@hook_layers": [],
-    "@distillation_mode": [],
-    "@bool_reuse_anchor_for_cls": True,
+    "@distillation_mode": ["distillation_loss"],
+    "@bool_reuse_anchor_for_cls": False,
     "@bool_biased_select_with_submodel": True,
     "@bool_delta_use_mask": False,
     "@bool_oldclassoldanchor_predicts_only": False,
