@@ -432,6 +432,10 @@ class Network(nn.Module):
             32: {"num_classes": 4, "num_anchor_per_loc": 8},
             50: {"num_classes": 5, "num_anchor_per_loc": 10},
         }
+        parse_cls_conv_layer = {
+            **parse_cls_conv_layer,
+            **{2*i*i: {"num_classes": i, "num_anchor_per_loc": 2*i}
+               for i in range(6, 11)}}
         if ckpt_path is None:
             return
         if not Path(ckpt_path).is_file():
