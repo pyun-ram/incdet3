@@ -215,6 +215,7 @@ class NuScenesDataset(Dataset):
             obj.type = name
             obj.x, obj.y, obj.z = xyz_FIMU.flatten()
             obj.w, obj.l, obj.h = wlh.flatten()
+            obj.z -= obj.h / 2.0
             obj.ry = ry
             obj.truncated = 0
             obj.occluded = 0
@@ -613,7 +614,8 @@ def _second_det_to_nusc_box(detection):
     box3d = detection["box3d_lidar"].detach().cpu().numpy()
     scores = detection["scores"].detach().cpu().numpy()
     labels = detection["label_preds"].detach().cpu().numpy()
-    box3d[:, 6] = -box3d[:, 6] - np.pi / 2
+    box3d[:, 2] += box3d[:, 5] / 2.0
+    # box3d[:, 6] = -box3d[:, 6] - np.pi / 2
     box_list = []
     for i in range(box3d.shape[0]):
         quat = pyquaternion.Quaternion(axis=[0, 0, 1], radians=box3d[i, 6])
