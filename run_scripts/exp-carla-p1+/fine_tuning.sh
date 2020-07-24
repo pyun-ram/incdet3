@@ -8,7 +8,7 @@ CUDA_VISIBLE_DEVICES=$GPUID python3 main.py \
     --mode train
 
 mkdir saved_weights/incdet-saveweights/
-cp saved_weights/July24-expcarlap1+-finetune-cv0-${reuse_tag}/IncDetMain-20000.ckpt \
+cp saved_weights/July24-expcarlap1+-finetune-cv0-${reuse_tag}/IncDetMain-20000.tckpt \
     saved_weights/incdet-saveweights/IncDetExpCARLAP1+-finetune-cv0-${reuse_tag}-20000.tckpt
 
 CUDA_VISIBLE_DEVICES=$GPUID python3 main.py \

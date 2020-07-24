@@ -123,7 +123,7 @@ cfg.TRAINDATA = {
         },
         "@feature_map_size": None, # TBD in dataloader_builder.py
         "@classes_to_exclude": ["Car", "Pedestrian"]
-    }，
+    },
     "prep_infos": {
         "@valid_range": cfg.TASK["valid_range"],
         "@target_classes": ["Cyclist"]
