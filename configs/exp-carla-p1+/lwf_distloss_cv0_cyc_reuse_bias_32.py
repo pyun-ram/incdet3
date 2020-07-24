@@ -180,7 +180,7 @@ cfg.NETWORK = {
         "ignore_params": []
     },
     "@sub_model_resume_dict": {
-        "ckpt_path": "saved_weights/incdet-saveweights/IncDetExpCARLAP1+-lwf-cv0-20000.tckpt",
+        "ckpt_path": "saved_weights/incdet-saveweights/IncDetExpCARLAP1+-lwf-cv0-reuse-bias-32-20000.tckpt",
         "num_classes": 2,
         "num_anchor_per_loc": 4,
         "partially_load_params": [],

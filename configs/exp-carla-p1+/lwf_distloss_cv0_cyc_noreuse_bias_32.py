@@ -169,7 +169,7 @@ cfg.NETWORK = {
     "@classes_target": ["Car", "Pedestrian", "Cyclist"],
     "@classes_source": ["Car", "Pedestrian"],
     "@model_resume_dict": {
-        "ckpt_path": "saved_weights/incdet-saveweights/IncDetExpCARLAP1+-lwf-cv0-20000.tckpt",
+        "ckpt_path": "saved_weights/incdet-saveweights/IncDetExpCARLAP1+-lwf-cv0-noreuse-bias-32-20000.tckpt",
         "num_classes": 2,
         "num_anchor_per_loc": 4,
         "partially_load_params": [
