@@ -1,19 +1,21 @@
 #!/bin/bash
-GPUID="0"
+GPUID=$1
+for i in {1..4}
+do
 for reuse_tag in "reuse" "noreuse"
 do
 CUDA_VISIBLE_DEVICES=$GPUID python3 main.py \
-    --tag July24-expcarlap1+-finetune-cv0-${reuse_tag} \
-    --cfg-path configs/exp-carla-p1+/finetuning_cv0_${reuse_tag}.py \
+    --tag July24-expcarlap1+-finetune-cv${i}-${reuse_tag} \
+    --cfg-path configs/exp-carla-p1+/finetuning_cv${i}_${reuse_tag}.py \
     --mode train
 
 mkdir saved_weights/incdet-saveweights/
-cp saved_weights/July24-expcarlap1+-finetune-cv0-${reuse_tag}/IncDetMain-20000.tckpt \
-    saved_weights/incdet-saveweights/IncDetExpCARLAP1+-finetune-cv0-${reuse_tag}-20000.tckpt
+cp saved_weights/July24-expcarlap1+-finetune-cv${i}-${reuse_tag}/IncDetMain-20000.tckpt \
+    saved_weights/incdet-saveweights/IncDetExpCARLAP1+-finetune-cv${i}-${reuse_tag}-20000.tckpt
 
 CUDA_VISIBLE_DEVICES=$GPUID python3 main.py \
-    --tag July24-expcarlap1+-finetune-cv0-cyc-${reuse_tag} \
-    --cfg-path configs/exp-carla-p1+/finetuning_cv0_cyc_${reuse_tag}.py \
+    --tag July24-expcarlap1+-finetune-cv${i}-cyc-${reuse_tag} \
+    --cfg-path configs/exp-carla-p1+/finetuning_cv${i}_cyc_${reuse_tag}.py \
     --mode train
-
+done
 done
