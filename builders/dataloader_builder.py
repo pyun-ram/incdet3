@@ -7,6 +7,7 @@ from functools import partial
 from det3.utils.utils import is_param, proc_param
 from incdet3.data.carlapreproc import anchor_creating as anchor_creating_carla
 from incdet3.data.carlapreproc import prep_pointcloud as prep_func_carla
+from incdet3.data.carlapreproc import prep_info as prep_info_func_carla
 from incdet3.data.carladataset import CarlaDataset
 from incdet3.data.nuscenes_dataset import NuScenesDataset
 
@@ -35,20 +36,33 @@ def build_prep_func(voxelizer,
     params["target_assigner"] = target_assigner
     params["anchor_cache"] = anchor_cache
     if dataset_name == "carla":
-        prep_cfg = partial(prep_func_carla, **params)
+        prep_func = partial(prep_func_carla, **params)
     elif dataset_name == "nusc":
-        prep_cfg = partial(prep_func_carla, **params)
+        prep_func = partial(prep_func_carla, **params)
     else:
         raise NotImplementedError
-    return prep_cfg
+    return prep_func
+
+def build_prep_info_func(prep_info_cfg, dataset_name):
+    params = {proc_param(k): v
+        for k, v in prep_info_cfg.items() if is_param(k)}
+    if dataset_name == "carla":
+        prep_info_func = partial(prep_info_func_carla, **params)
+    elif dataset_name == "nusc":
+        prep_info_func = partial(prep_info_func_carla, **params)
+    else:
+        raise NotImplementedError
+    return prep_info_func
 
 def build_dataset(
     data_cfg,
     prep_func,
+    prep_info_func,
     dataset_name):
     params = {proc_param(k): v
         for k, v in data_cfg.items() if is_param(k)}
     params["prep_func"] = prep_func
+    params["prep_info_func"] = prep_info_func
     if dataset_name == "carla":
         dataset = CarlaDataset(**params)
     elif dataset_name == "nusc":
@@ -128,10 +142,17 @@ def build(data_cfg, ext_dict: dict):
         target_assigner=target_assigner,
         anchor_cache=anchor_cache,
         dataset_name=dataset_name)
+    if "prep_infos" in data_cfg.keys():
+        prep_info_func = build_prep_info_func(
+            prep_info_cfg=data_cfg["prep_infos"],
+            dataset_name=dataset_name)
+    else:
+        prep_info_func = lambda x: x
     # build dataset
     dataset = build_dataset(
         data_cfg=data_cfg,
         prep_func=prep_func,
+        prep_info_func=prep_info_func,
         dataset_name=dataset_name)
     # create dataloader
     training = data_cfg["training"]

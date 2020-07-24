@@ -266,6 +266,43 @@ def prep_pointcloud(input_dict,
         })
     return example
 
+def prep_info(info_pkl, valid_range, target_classes):
+    '''
+    preserve the item in <info> if any instance of
+    <target_classes> exists in <valid_range>.
+    @info_pkl: List
+    @valid_range: [xmin, ymin, zmin, xmax, ymax, zmax]
+    @target_classes: [str]
+    '''
+    def print_info(info_pkl):
+        print(f"info file has {len(info_pkl)} items.")
+        cls_acc_dict = {}
+        for itm in info_pkl:
+            label = itm["label"]
+            if label.data is None:
+                continue
+            for obj in label.data:
+                if obj.type in cls_acc_dict.keys():
+                    cls_acc_dict[obj.type] += 1
+                else:
+                    cls_acc_dict[obj.type] = 1
+        for k, v in cls_acc_dict.items():
+            print(f"{k}: {v} instances.")
+    print("before preprocessing info file:")
+    print_info(info_pkl)
+    target_info = []
+    for itm in info_pkl:
+        label = itm["label"]
+        if label.data is None:
+            continue
+        label_ = filt_label_by_range(label, valid_range)
+        label_ = filt_label_by_cls(label_, target_classes)
+        if len(label_) > 0:
+            target_info.append(itm)
+    print("after preprocessing info file:")
+    print_info(target_info)
+    return target_info
+
 if __name__ == "__main__":
     from incdet3.data.carladataset import CarlaDataset
     from incdet3.configs.dev_cfg import cfg

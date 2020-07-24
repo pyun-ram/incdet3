@@ -410,5 +410,101 @@ class Test_exclude_classes(unittest.TestCase):
         self.assertFalse(has1)
         self.assertFalse(has2)
 
+class Test_prep_infos(unittest.TestCase):
+    VOXELIZER_cfg = {
+        "type": "VoxelizerV1",
+        "@voxel_size": [0.05, 0.05, 0.1],
+        "@point_cloud_range": [-35.2, -40, -1.5, 35.2, 40, 2.6],
+        "@max_num_points": 5,
+        "@max_voxels": 100000
+    }
+    TARGETASSIGNER_cfg = {
+        "type": "TaskAssignerV1",
+        "@classes": ["Car", "Pedestrian"],
+        "@feature_map_sizes": None,
+        "@positive_fraction": None,
+        "@sample_size": 512,
+        "@assign_per_class": True,
+        "box_coder": {
+            "type": "BoxCoderV1",
+            "@custom_ndim": 0
+        },
+        "class_settings_car": {
+            "AnchorGenerator": {
+                "type": "AnchorGeneratorBEV",
+                "@class_name": "Car",
+                "@anchor_ranges": [-35.2, -40,0, 35.2, 40, 0], # TBD in modify_cfg(cfg)
+                "@sizes": [1.6, 3.9, 1.56], # wlh
+                "@rotations": [0, 1.57],
+                "@match_threshold": 0.6,
+                "@unmatch_threshold": 0.45,
+            },
+            "SimilarityCalculator": {
+                "type": "NearestIoUSimilarity"
+            }
+        },
+        "class_settings_pedestrian": {
+            "AnchorGenerator": {
+                "type": "AnchorGeneratorBEV",
+                "@class_name": "Pedestrian",
+                "@anchor_ranges": [-35.2, -40, 0, 35.2, 40, 0], # TBD in modify_cfg(cfg)
+                "@sizes": [0.6, 0.8, 1.73], # wlh
+                "@rotations": [0, 1.57],
+                "@match_threshold": 0.6,
+                "@unmatch_threshold": 0.45,
+            },
+            "SimilarityCalculator": {
+                "type": "NearestIoUSimilarity"
+            }
+        },
+    }
+    TRAINDATA_cfg = {
+        "dataset": "carla", # carla
+        "training": False, # set this to false to avoid shuffle
+        "batch_size": 1,
+        "num_workers": 1,
+        "@root_path": "unit_tests/data/test_carladata",
+        "@info_path": "unit_tests/data/test_carladata/CARLA_infos_train.pkl",
+        "@class_names": ["Car", "Pedestrian"],
+        "prep": {
+            "@training": True, # set this to True to return targets
+            "@augment_dict": None,
+            "@filter_label_dict":
+            {
+                "keep_classes": ["Car", "Pedestrian"],
+                "min_num_pts": -1,
+                "label_range": [-35.2, -40, -1.5, 35.2, 40, 10],
+                # [min_x, min_y, min_z, max_x, max_y, max_z] FIMU
+            },
+            "@feature_map_size": [1, 200, 176], # TBD
+            "@classes_to_exclude": []
+        }
+    }
+    def __init__(self, *args, **kwargs):
+        super(Test_prep_infos, self).__init__(*args, **kwargs)
+
+    def test_prep_infos1(self):
+        '''
+        filt
+        '''
+        data_cfg = Test_prep_infos.TRAINDATA_cfg
+        data_cfg["prep_infos"] = {
+            "@valid_range": [-35.2, -40, -1.5, 35.2, 40, 2.6],
+            "@target_classes": ["Pedestrian"]
+        }
+        voxelizer = voxelizer_builder.build(Test_exclude_classes.VOXELIZER_cfg)
+        target_assigner = target_assigner_builder.build(Test_exclude_classes.TARGETASSIGNER_cfg)
+        dataloader = build(data_cfg,
+            ext_dict={
+                "voxelizer": voxelizer,
+                "target_assigner": target_assigner,
+                "feature_map_size": [1, 200, 176]
+            })
+        for data in dataloader:
+            labels =data["labels"]
+            labels1 = labels[labels == 1]
+            labels2 = labels[labels == 2]
+            self.assertTrue(labels2.shape[0] > 0)
+
 if __name__ == "__main__":
     unittest.main()

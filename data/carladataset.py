@@ -13,8 +13,9 @@ class CarlaDataset:
                  root_path,
                  info_path,
                  class_names,
-                 prep_func=None):
-        self._carla_infos = load_pickle(info_path)
+                 prep_func=None,
+                 prep_info_func=lambda x:x):
+        self._carla_infos = prep_info_func(load_pickle(info_path))
         self._root_path = root_path
         self._class_names = class_names
         # TODO: Do we need the _classes_to_exclude?
