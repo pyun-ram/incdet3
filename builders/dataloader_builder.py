@@ -62,8 +62,8 @@ def build_dataset(
     params = {proc_param(k): v
         for k, v in data_cfg.items() if is_param(k)}
     params["prep_func"] = prep_func
-    params["prep_info_func"] = prep_info_func
     if dataset_name == "carla":
+        params["prep_info_func"] = prep_info_func
         dataset = CarlaDataset(**params)
     elif dataset_name == "nusc":
         dataset = NuScenesDataset(**params)

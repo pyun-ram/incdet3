@@ -446,7 +446,9 @@ class NuScenesDataset(Dataset):
             json.dump(nusc_submissions, f)
         eval_main_file = Path(__file__).resolve().parent / "nusc_eval.py"
         # why add \"{}\"? to support path with spaces.
-        if self.version != "v1.0-trainval":
+        if self.version == "v1.0-mini":
+            eval_set = f"mini_{self._info_path.split('/')[-1].split('.')[0].split('_')[-1]}"
+        elif self.version != "v1.0-trainval":
             eval_set = f"{self.version.split('-')[0]}_{self._info_path.split('/')[-1].split('.')[0].split('_')[-1]}"
         else:
             eval_set = self._info_path.split('/')[-1].split('.')[0].split('_')[-1]
