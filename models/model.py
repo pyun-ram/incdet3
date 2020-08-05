@@ -446,6 +446,17 @@ class Network(nn.Module):
         num_conv_cls_bias = new_sd["rpn.conv_cls.bias"].shape[0]
         new_num_classes = parse_cls_conv_layer[num_conv_cls_bias]["num_classes"]
         new_num_anchor_per_loc = parse_cls_conv_layer[num_conv_cls_bias]["num_anchor_per_loc"]
+        old_sd_change = {}
+        if "KITTIRESUME.pkl" in ckpt_path:
+            for k, v in old_sd.items():
+                if "middle_feature_extractor" in k:
+                    new_k = "middle_layer"
+                    new_k = [new_k] + k.split(".")[1:]
+                    new_k = ".".join(new_k)
+                else:
+                    new_k = k
+                old_sd_change[new_k] = v
+            old_sd = old_sd_change
         for key in new_sd.keys():
             if key in ignore_params:
                 new_sd[key] = new_sd[key]
