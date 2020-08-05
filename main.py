@@ -16,6 +16,7 @@ import argparse
 import time
 import torch
 from tqdm import tqdm
+from apex import amp
 from datetime import datetime
 from shutil import copy as fcopy
 from det3.ops import write_pkl
@@ -33,8 +34,10 @@ from incdet3.utils.utils import nusc_cls2color
 
 g_log_dir, g_save_dir = None, None
 g_since = None
+g_use_fp16 = None
 
 def setup_cores(cfg, mode):
+    global g_use_fp16
     if mode == "train":
         # build dataloader_train
         voxelizer = build_voxelizer(cfg.VOXELIZER)
@@ -68,6 +71,11 @@ def setup_cores(cfg, mode):
             optimizer_cfg=cfg.TRAIN["optimizer_dict"],
             lr_scheduler_cfg=cfg.TRAIN["lr_scheduler_dict"],
             start_iter=network.get_global_step())
+        # handle fp16 training
+        use_fp16 = cfg.TASK["use_fp16"] if "use_fp16" in cfg.TASK.keys() else False
+        if use_fp16:
+            network, optimizer = amp.initialize(network, optimizer, opt_level="O2")
+        g_use_fp16 = use_fp16
     else:
         # build dataloader_train
         voxelizer = build_voxelizer(cfg.VOXELIZER)
@@ -130,11 +138,16 @@ def train_one_iter(model,
     optimizer,
     lr_scheduler,
     num_iter):
+    global g_use_fp16
     model.train()
     optimizer.zero_grad()
     loss_dict = model(data)
     loss = loss_dict["loss_total"].mean()
-    loss.backward()
+    if g_use_fp16:
+        with amp.scale_loss(loss, optimizer) as scaled_loss:
+            scaled_loss.backward()
+    else:
+        loss.backward()
     torch.nn.utils.clip_grad_norm_(model.parameters(), 10.0)
     optimizer.step()
     lr_scheduler.step()
