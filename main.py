@@ -174,7 +174,13 @@ def val_one_epoch(model, dataloader):
         data = example_convert_to_torch(data)
         detection = model(data)
         detections.append(detection[0])
-    eval_res = dataloader.dataset.evaluation(detections)
+    dataset_type = str(type(dataloader.dataset))
+    if 'NuScenesDataset' in dataset_type:
+        # to avoid the file conflict situation
+        # if train multiple cases on a single machine simultaneously.
+        eval_res = dataloader.dataset.evaluation(detections, output_dir=g_log_dir)
+    else:
+        eval_res = dataloader.dataset.evaluation(detections)
     info = {
         "eval_res": eval_res,
         "num_iter": model.get_global_step(),
