@@ -126,13 +126,7 @@ cfg.TESTDATA = {
 cfg.NETWORK = {
     "@classes_target": ["Car", "Pedestrian", "Cyclist", "Van"],
     "@classes_source": None,
-    "@model_resume_dict": {
-        "ckpt_path": "saved_weights/20200811-dev-kitti-train_train_scratch/IncDetMain-901.tckpt",
-        "num_classes": 1,
-        "num_anchor_per_loc": 2,
-        "partially_load_params": [],
-        "ignore_params": []
-    },
+    "@model_resume_dict": None,
     "@sub_model_resume_dict": None,
     "@voxel_encoder_dict": {
         "name": "SimpleVoxel",
