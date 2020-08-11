@@ -24,6 +24,7 @@ from det3.utils.utils import proc_param, is_param
 from det3.utils.log_tool import Logger
 from det3.utils.import_tool import load_module
 from det3.dataloader.carladata import CarlaData, CarlaObj
+from det3.dataloader.kittidata import KittiData, KittiObj
 from det3.visualizer.vis import BEVImage
 from incdet3.models.model import Network
 from incdet3.builders.voxelizer_builder import build as build_voxelizer
@@ -179,6 +180,12 @@ def val_one_epoch(model, dataloader):
         # to avoid the file conflict situation
         # if train multiple cases on a single machine simultaneously.
         eval_res = dataloader.dataset.evaluation(detections, output_dir=g_log_dir)
+    elif 'KittiDataset' in dataset_type:
+        label_dir = os.path.join(dataloader.dataset._root_path, "label_2")
+        eval_res = dataloader.dataset.evaluation(
+            detections,
+            output_dir=g_log_dir,
+            label_dir=label_dir)
     else:
         eval_res = dataloader.dataset.evaluation(detections)
     info = {
@@ -203,6 +210,24 @@ def log_val_info(info, itr, vis_param_dict=None):
     os.makedirs(log_val_dir, exist_ok=True)
     write_pkl(detections, os.path.join(log_val_dir, "val_detections.pkl"))
     write_pkl(eval_res, os.path.join(log_val_dir, "val_eval_res.pkl"))
+    # only kitti dataset evaluation output "result"
+    # carla dataset evaluation output "results"
+    if "result" in eval_res.keys():
+        Logger().log_txt(str(eval_res['result']))
+        num_vis = 1 if len(detections) < 10 else 10
+        interval = int(len(detections)/ 10)
+        for idx in [i*interval for i in range(num_vis)]:
+            detection = detections[idx]
+            tag = detection['metadata']['tag']
+            vis_img = vis_fn_kitti(idx=tag,
+                detection=detection,
+                data_dir=vis_param_dict["data_dir"],
+                x_range=vis_param_dict["x_range"],
+                y_range=vis_param_dict["y_range"],
+                grid_size=vis_param_dict["grid_size"])
+            Logger().log_tsbd_img("val/detections", vis_img.data, num_iter)
+        return
+
     if "carla" in eval_res['results'].keys():
         Logger().log_txt(str(eval_res['results']['carla']))
         num_vis = 1 if len(detections) < 10 else 10
@@ -232,6 +257,36 @@ def log_val_info(info, itr, vis_param_dict=None):
             Logger().log_tsbd_img("val/detections", vis_img.data, num_iter)
     else:
         raise NotImplementedError
+
+def vis_fn_kitti(data_dir,
+    idx,
+    detection,
+    x_range=(-35.2, 35.2),
+    y_range=(-40, 40),
+    grid_size=(0.1, 0.1)):
+    itm = detection
+    output_dict = {
+        "calib": True,
+        "image": False,
+        "label": True,
+        "velodyne": True
+    }
+    calib, _, label, pc = KittiData(data_dir,
+        idx,output_dict=output_dict).read_data()
+    bevimg = BEVImage(x_range, y_range, grid_size)
+    bevimg.from_lidar(pc)
+    for obj in label.data:
+        bevimg.draw_box(obj, calib, bool_gt=True)
+    box3d_lidar = itm["box3d_lidar"]
+    score = itm["scores"]
+    for box3d_lidar_, score_ in zip(box3d_lidar, score):
+        x, y, z, w, l, h, ry = box3d_lidar_
+        obj = KittiObj()
+        obj.x, obj.y, obj.z = x, y, z
+        obj.w, obj.l, obj.h = w, l, h
+        obj.ry = ry
+        bevimg.draw_box(obj, calib, bool_gt=False, width=2)
+    return bevimg
 
 def vis_fn_nusc(dataset,
     idx,

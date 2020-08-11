@@ -210,7 +210,7 @@ def prep_pointcloud(input_dict,
     gt_calib = input_dict["calib"]
     gt_label = input_dict["cam"]["label"]
     pc_Flidar = input_dict["lidar"]["points"]
-    pc = pc_Flidar
+    pc = pc_Flidar[:, :3]
 
     label, calib, pc = db_sampling(pc=pc,
                                    gt_calib=gt_calib,
