@@ -9,6 +9,10 @@ from incdet3.data.carlapreproc import anchor_creating as anchor_creating_carla
 from incdet3.data.carlapreproc import prep_pointcloud as prep_func_carla
 from incdet3.data.carlapreproc import prep_info as prep_info_func_carla
 from incdet3.data.carladataset import CarlaDataset
+from incdet3.data.kittipreproc import anchor_creating as anchor_creating_kitti
+from incdet3.data.kittipreproc import prep_pointcloud as prep_func_kitti
+from incdet3.data.kittipreproc import prep_info as prep_info_func_kitti
+from incdet3.data.kittidataset import KittiDataset
 from incdet3.data.nuscenes_dataset import NuScenesDataset
 
 def create_anchor_cache(target_assigner,
@@ -20,6 +24,10 @@ def create_anchor_cache(target_assigner,
             anchor_cache=None)
     elif dataset_name == "nusc":
         return anchor_creating_carla(target_assigner,
+            feature_map_size,
+            anchor_cache=None)
+    elif dataset_name == "kitti":
+        return anchor_creating_kitti(target_assigner,
             feature_map_size,
             anchor_cache=None)
     else:
@@ -39,6 +47,8 @@ def build_prep_func(voxelizer,
         prep_func = partial(prep_func_carla, **params)
     elif dataset_name == "nusc":
         prep_func = partial(prep_func_carla, **params)
+    elif dataset_name == "kitti":
+        prep_func = partial(prep_func_kitti, **params)
     else:
         raise NotImplementedError
     return prep_func
@@ -50,6 +60,8 @@ def build_prep_info_func(prep_info_cfg, dataset_name):
         prep_info_func = partial(prep_info_func_carla, **params)
     elif dataset_name == "nusc":
         prep_info_func = partial(prep_info_func_carla, **params)
+    elif dataset_name == "kitti":
+        prep_info_func = partial(prep_info_func_kitti, **params)
     else:
         raise NotImplementedError
     return prep_info_func
@@ -67,6 +79,9 @@ def build_dataset(
         dataset = CarlaDataset(**params)
     elif dataset_name == "nusc":
         dataset = NuScenesDataset(**params)
+    elif dataset_name == "kitti":
+        params["prep_info_func"] = prep_info_func
+        dataset = KittiDataset(**params)
     else:
         raise NotImplementedError
     return dataset

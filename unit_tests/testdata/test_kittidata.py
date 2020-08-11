@@ -1,25 +1,22 @@
 '''
- File Created: Sat Jun 20 2020
+ File Created: Tue Aug 11 2020
  Author: Peng YUN (pyun@ust.hk)
  Copyright 2018-2020 Peng YUN, RAM-Lab, HKUST
 '''
-
 import unittest
 import numpy as np
-from incdet3.utils import deg2rad
-from det3.ops import read_npy, write_npy
-from incdet3.data.carladataset import CarlaDataset
+from det3.ops import write_npy, read_npy
+from det3.dataloader.kittidata import KittiObj, KittiLabel, KittiCalib
+from incdet3.data.kittidataset import KittiDataset
 from incdet3.builders import voxelizer_builder, target_assigner_builder
 from incdet3.builders.dataloader_builder import build
-
-
-class Test_carladata_general(unittest.TestCase):
+class Test_kittidata_general(unittest.TestCase):
     VOXELIZER_cfg = {
         "type": "VoxelizerV1",
         "@voxel_size": [0.05, 0.05, 0.1],
-        "@point_cloud_range": [-35.2, -40, -1.5, 35.2, 40, 2.6],
+        "@point_cloud_range": [0, -32, -3, 52.8, 32.0, 1],
         "@max_num_points": 5,
-        "@max_voxels": 100000
+        "@max_voxels": 20000
     }
     TARGETASSIGNER_cfg = {
         "type": "TaskAssignerV1",
@@ -36,7 +33,7 @@ class Test_carladata_general(unittest.TestCase):
             "AnchorGenerator": {
                 "type": "AnchorGeneratorBEV",
                 "@class_name": "Car",
-                "@anchor_ranges": [-35.2, -40,0, 35.2, 40, 0], # TBD in modify_cfg(cfg)
+                "@anchor_ranges": [0, -32, 0, 52.8, 32.0, 0], # TBD in modify_cfg(cfg)
                 "@sizes": [1.6, 3.9, 1.56], # wlh
                 "@rotations": [0, 1.57],
                 "@match_threshold": 0.6,
@@ -50,7 +47,7 @@ class Test_carladata_general(unittest.TestCase):
             "AnchorGenerator": {
                 "type": "AnchorGeneratorBEV",
                 "@class_name": "Pedestrian",
-                "@anchor_ranges": [-35.2, -40, 0, 35.2, 40, 0], # TBD in modify_cfg(cfg)
+                "@anchor_ranges": [0, -32, 0, 52.8, 32.0, 0], # TBD in modify_cfg(cfg)
                 "@sizes": [0.6, 0.8, 1.73], # wlh
                 "@rotations": [0, 1.57],
                 "@match_threshold": 0.6,
@@ -62,12 +59,12 @@ class Test_carladata_general(unittest.TestCase):
         },
     }
     TRAINDATA_cfg = {
-        "dataset": "carla", # carla
+        "dataset": "kitti", # carla
         "training": False, # set this to false to avoid shuffle
         "batch_size": 1,
         "num_workers": 1,
-        "@root_path": "unit_tests/data/test_carladata",
-        "@info_path": "unit_tests/data/test_carladata/CARLA_infos_train.pkl",
+        "@root_path": "unit_tests/data/test_kittidata",
+        "@info_path": "unit_tests/data/test_kittidata/KITTI_infos_train.pkl",
         "@class_names": ["Car", "Pedestrian"],
         "prep": {
             "@training": True, # set this to True to return targets
@@ -76,21 +73,18 @@ class Test_carladata_general(unittest.TestCase):
             {
                 "keep_classes": ["Car", "Pedestrian"],
                 "min_num_pts": -1,
-                "label_range": [-35.2, -40, -1.5, 35.2, 40, 10],
+                "label_range": [0, -32, -3, 52.8, 32.0, 1],
                 # [min_x, min_y, min_z, max_x, max_y, max_z] FIMU
             },
             "@feature_map_size": [1, 200, 176] # TBD
         }
     }
     def __init__(self, *args, **kwargs):
-        super(Test_carladata_general, self).__init__(*args, **kwargs)
-        from incdet3.data.carladataset import CarlaDataset
-        from incdet3.builders import voxelizer_builder, target_assigner_builder
-        from incdet3.builders.dataloader_builder import build
+        super(Test_kittidata_general, self).__init__(*args, **kwargs)
 
-        data_cfg = Test_carladata_general.TRAINDATA_cfg
-        voxelizer = voxelizer_builder.build(Test_carladata_general.VOXELIZER_cfg)
-        target_assigner = target_assigner_builder.build(Test_carladata_general.TARGETASSIGNER_cfg)
+        data_cfg = Test_kittidata_general.TRAINDATA_cfg
+        voxelizer = voxelizer_builder.build(Test_kittidata_general.VOXELIZER_cfg)
+        target_assigner = target_assigner_builder.build(Test_kittidata_general.TARGETASSIGNER_cfg)
         dataloader = build(data_cfg,
             ext_dict={
                 "voxelizer": voxelizer,
@@ -106,12 +100,11 @@ class Test_carladata_general(unittest.TestCase):
                 break
             else:
                 continue
-
     def test_voxels(self):
         pc = self.data["voxels"].reshape(-1, 3)
         mask = pc.sum(-1) != 0
         pc = pc[mask]
-        gt = read_npy("unit_tests/results/test_carladata_general.npy")
+        gt = read_npy("unit_tests/results/test_kittidata_general.npy")
         self.assertTrue(np.array_equal(gt, pc))
         voxel_range = self.VOXELIZER_cfg["@point_cloud_range"]
         voxel_res = self.VOXELIZER_cfg["@voxel_size"]
@@ -130,7 +123,7 @@ class Test_carladata_general(unittest.TestCase):
         data = self.data
         anchors = data["anchors"].reshape(1, 4, 200, 176, 7)
         self.assertTrue(np.allclose(anchors[:, :, 0, 0, :3],
-            np.array([-35.2, -40, 0])))
+            np.array([0, -32, 0])))
         self.assertTrue(np.allclose(anchors[:, :, 0, 0, 3:],
             np.array([[1.6, 3.9, 1.56, 0],
                       [1.6, 3.9, 1.56, 1.57],
@@ -138,7 +131,7 @@ class Test_carladata_general(unittest.TestCase):
                       [0.6, 0.8, 1.73, 1.57]
                      ])))
         self.assertTrue(np.allclose(anchors[:, :, 199, 175, :3],
-            np.array([35.2, 40, 0])))
+            np.array([52.8, 32.0, 0])))
         self.assertTrue(np.allclose(anchors[:, :, 0, 0, 3:],
             np.array([[1.6, 3.9, 1.56, 0],
                       [1.6, 3.9, 1.56, 1.57],
@@ -152,8 +145,14 @@ class Test_carladata_general(unittest.TestCase):
         import torch
         import torch.nn as nn
         from det3.methods.second.ops.torch_ops import rotate_nms
-        data = self.data
+        from det3.dataloader.kittidata import KittiCalib
+        for i, data in enumerate(self.dataloader):
+            if i == 2:
+                break
+            else:
+                continue
         label = data["metadata"][0]["label"]
+        tag = data["metadata"][0]["tag"]
         cls_pred = torch.from_numpy(data["labels"]).cuda().float()
         cls_pred *= (cls_pred >= 0).float()
         cls_pred = cls_pred.long()
@@ -202,23 +201,42 @@ class Test_carladata_general(unittest.TestCase):
                 "scores": final_scores,
                 "label_preds": label_preds,
             }
-            from det3.dataloader.carladata import CarlaObj, CarlaLabel
-            label_gt = CarlaLabel()
-            label_est = CarlaLabel()
+            from det3.dataloader.kittidata import KittiObj, KittiLabel
+            label_gt = KittiLabel()
+            label_est = KittiLabel()
+            calib = KittiCalib(f"unit_tests/data/test_kittidata/training/calib/{tag}.txt").read_calib_file()
             for obj_str in label.split("\n"):
-                try:
-                    obj = CarlaObj(obj_str)
-                except:
-                    pass
-                if -35.2 < obj.x < 35.2 and -40 < obj.y < 40:
-                    label_gt.add_obj(obj)
+                if len(obj_str) == 0:
+                    continue
+                obj = KittiObj(obj_str)
+                if obj.type not in ["Car", "Pedestrian"]:
+                    continue
+                bcenter_Fcam = np.array([obj.x, obj.y, obj.z]).reshape(-1, 3)
+                bcenter_Flidar = calib.leftcam2lidar(bcenter_Fcam)
+                center_Flidar = bcenter_Flidar + np.array([0, 0, obj.h/2.0]).reshape(-1, 3)
+                if (center_Flidar[0, 0] < 0 or center_Flidar[0, 0] > 52.8
+                    or center_Flidar[0, 1] < -30 or center_Flidar[0, 1] > 30
+                    or center_Flidar[0, 2] < -3 or center_Flidar[0, 2] > 1):
+                    continue
+                obj.truncated = 0
+                obj.occluded = 0
+                obj.alpha = 0
+                obj.bbox_l = 0
+                obj.bbox_t = 0
+                obj.bbox_r = 0
+                obj.bbox_b = 0
+                label_gt.add_obj(obj)
             for box3d_lidar, label_preds, score in zip(
                     predictions_dict["box3d_lidar"],
                     predictions_dict["label_preds"],
                     predictions_dict["scores"]):
-                obj = CarlaObj()
+                obj = KittiObj()
                 obj.type = "Car" if label_preds == 0 else "Pedestrian"
-                obj.x, obj.y, obj.z, obj.w, obj.l, obj.h, obj.ry = box3d_lidar.cpu().numpy().flatten()
+                xyzwlhry_Flidar = box3d_lidar.cpu().numpy().flatten()
+                bcenter_Flidar = xyzwlhry_Flidar[:3].reshape(-1, 3)
+                bcenter_Fcam = calib.lidar2leftcam(bcenter_Flidar)
+                obj.x, obj.y, obj.z = bcenter_Fcam.flatten()
+                obj.w, obj.l, obj.h, obj.ry = xyzwlhry_Flidar[3:]
                 obj.truncated = 0
                 obj.occluded = 0
                 obj.alpha = 0
@@ -233,9 +251,9 @@ class Test_exclude_classes(unittest.TestCase):
     VOXELIZER_cfg = {
         "type": "VoxelizerV1",
         "@voxel_size": [0.05, 0.05, 0.1],
-        "@point_cloud_range": [-35.2, -40, -1.5, 35.2, 40, 2.6],
+        "@point_cloud_range": [0, -32, -3, 52.8, 32.0, 1],
         "@max_num_points": 5,
-        "@max_voxels": 100000
+        "@max_voxels": 20000
     }
     TARGETASSIGNER_cfg = {
         "type": "TaskAssignerV1",
@@ -252,7 +270,7 @@ class Test_exclude_classes(unittest.TestCase):
             "AnchorGenerator": {
                 "type": "AnchorGeneratorBEV",
                 "@class_name": "Car",
-                "@anchor_ranges": [-35.2, -40,0, 35.2, 40, 0], # TBD in modify_cfg(cfg)
+                "@anchor_ranges": [0, -32, 0, 52.8, 32.0, 0], # TBD in modify_cfg(cfg)
                 "@sizes": [1.6, 3.9, 1.56], # wlh
                 "@rotations": [0, 1.57],
                 "@match_threshold": 0.6,
@@ -266,7 +284,7 @@ class Test_exclude_classes(unittest.TestCase):
             "AnchorGenerator": {
                 "type": "AnchorGeneratorBEV",
                 "@class_name": "Pedestrian",
-                "@anchor_ranges": [-35.2, -40, 0, 35.2, 40, 0], # TBD in modify_cfg(cfg)
+                "@anchor_ranges": [0, -32, 0, 52.8, 32.0, 0], # TBD in modify_cfg(cfg)
                 "@sizes": [0.6, 0.8, 1.73], # wlh
                 "@rotations": [0, 1.57],
                 "@match_threshold": 0.6,
@@ -278,12 +296,12 @@ class Test_exclude_classes(unittest.TestCase):
         },
     }
     TRAINDATA_cfg = {
-        "dataset": "carla", # carla
+        "dataset": "kitti", # carla
         "training": False, # set this to false to avoid shuffle
         "batch_size": 1,
         "num_workers": 1,
-        "@root_path": "unit_tests/data/test_carladata",
-        "@info_path": "unit_tests/data/test_carladata/CARLA_infos_train.pkl",
+        "@root_path": "unit_tests/data/test_kittidata",
+        "@info_path": "unit_tests/data/test_kittidata/KITTI_infos_train.pkl",
         "@class_names": ["Car", "Pedestrian"],
         "prep": {
             "@training": True, # set this to True to return targets
@@ -292,16 +310,12 @@ class Test_exclude_classes(unittest.TestCase):
             {
                 "keep_classes": ["Car", "Pedestrian"],
                 "min_num_pts": -1,
-                "label_range": [-35.2, -40, -1.5, 35.2, 40, 10],
+                "label_range": [0, -32, -3, 52.8, 32.0, 1],
                 # [min_x, min_y, min_z, max_x, max_y, max_z] FIMU
             },
-            "@feature_map_size": [1, 200, 176], # TBD
-            "@classes_to_exclude": []
+            "@feature_map_size": [1, 200, 176] # TBD
         }
     }
-    def __init__(self, *args, **kwargs):
-        super(Test_exclude_classes, self).__init__(*args, **kwargs)
-
     def test_exclude_classes1(self):
         '''
         not exclude
@@ -414,9 +428,9 @@ class Test_prep_infos(unittest.TestCase):
     VOXELIZER_cfg = {
         "type": "VoxelizerV1",
         "@voxel_size": [0.05, 0.05, 0.1],
-        "@point_cloud_range": [-35.2, -40, -1.5, 35.2, 40, 2.6],
+        "@point_cloud_range": [0, -32, -3, 52.8, 32.0, 1],
         "@max_num_points": 5,
-        "@max_voxels": 100000
+        "@max_voxels": 20000
     }
     TARGETASSIGNER_cfg = {
         "type": "TaskAssignerV1",
@@ -433,7 +447,7 @@ class Test_prep_infos(unittest.TestCase):
             "AnchorGenerator": {
                 "type": "AnchorGeneratorBEV",
                 "@class_name": "Car",
-                "@anchor_ranges": [-35.2, -40,0, 35.2, 40, 0], # TBD in modify_cfg(cfg)
+                "@anchor_ranges": [0, -32, 0, 52.8, 32.0, 0], # TBD in modify_cfg(cfg)
                 "@sizes": [1.6, 3.9, 1.56], # wlh
                 "@rotations": [0, 1.57],
                 "@match_threshold": 0.6,
@@ -447,7 +461,7 @@ class Test_prep_infos(unittest.TestCase):
             "AnchorGenerator": {
                 "type": "AnchorGeneratorBEV",
                 "@class_name": "Pedestrian",
-                "@anchor_ranges": [-35.2, -40, 0, 35.2, 40, 0], # TBD in modify_cfg(cfg)
+                "@anchor_ranges": [0, -32, 0, 52.8, 32.0, 0], # TBD in modify_cfg(cfg)
                 "@sizes": [0.6, 0.8, 1.73], # wlh
                 "@rotations": [0, 1.57],
                 "@match_threshold": 0.6,
@@ -459,12 +473,12 @@ class Test_prep_infos(unittest.TestCase):
         },
     }
     TRAINDATA_cfg = {
-        "dataset": "carla", # carla
+        "dataset": "kitti", # carla
         "training": False, # set this to false to avoid shuffle
         "batch_size": 1,
         "num_workers": 1,
-        "@root_path": "unit_tests/data/test_carladata",
-        "@info_path": "unit_tests/data/test_carladata/CARLA_infos_train.pkl",
+        "@root_path": "unit_tests/data/test_kittidata",
+        "@info_path": "unit_tests/data/test_kittidata/KITTI_infos_train.pkl",
         "@class_names": ["Car", "Pedestrian"],
         "prep": {
             "@training": True, # set this to True to return targets
@@ -473,11 +487,10 @@ class Test_prep_infos(unittest.TestCase):
             {
                 "keep_classes": ["Car", "Pedestrian"],
                 "min_num_pts": -1,
-                "label_range": [-35.2, -40, -1.5, 35.2, 40, 10],
+                "label_range": [0, -32, -3, 52.8, 32.0, 1],
                 # [min_x, min_y, min_z, max_x, max_y, max_z] FIMU
             },
-            "@feature_map_size": [1, 200, 176], # TBD
-            "@classes_to_exclude": []
+            "@feature_map_size": [1, 200, 176] # TBD
         }
     }
     def __init__(self, *args, **kwargs):
@@ -489,7 +502,7 @@ class Test_prep_infos(unittest.TestCase):
         '''
         data_cfg = Test_prep_infos.TRAINDATA_cfg
         data_cfg["prep_infos"] = {
-            "@valid_range": [-35.2, -40, -1.5, 35.2, 40, 2.6],
+            "@valid_range": [0, -32, -3, 52.8, 32.0, 1],
             "@target_classes": ["Pedestrian"]
         }
         voxelizer = voxelizer_builder.build(Test_exclude_classes.VOXELIZER_cfg)
@@ -510,9 +523,9 @@ class Test_filt_labels(unittest.TestCase):
     VOXELIZER_cfg = {
         "type": "VoxelizerV1",
         "@voxel_size": [0.05, 0.05, 0.1],
-        "@point_cloud_range": [-35.2, -40, -1.5, 35.2, 40, 2.6],
+        "@point_cloud_range": [0, -32, -3, 52.8, 32.0, 1],
         "@max_num_points": 5,
-        "@max_voxels": 100000
+        "@max_voxels": 20000
     }
     TARGETASSIGNER_cfg = {
         "type": "TaskAssignerV1",
@@ -529,7 +542,7 @@ class Test_filt_labels(unittest.TestCase):
             "AnchorGenerator": {
                 "type": "AnchorGeneratorBEV",
                 "@class_name": "Car",
-                "@anchor_ranges": [-35.2, -40,0, 35.2, 40, 0], # TBD in modify_cfg(cfg)
+                "@anchor_ranges": [0, -32, 0, 52.8, 32.0, 0], # TBD in modify_cfg(cfg)
                 "@sizes": [1.6, 3.9, 1.56], # wlh
                 "@rotations": [0, 1.57],
                 "@match_threshold": 0.6,
@@ -543,7 +556,7 @@ class Test_filt_labels(unittest.TestCase):
             "AnchorGenerator": {
                 "type": "AnchorGeneratorBEV",
                 "@class_name": "Pedestrian",
-                "@anchor_ranges": [-35.2, -40, 0, 35.2, 40, 0], # TBD in modify_cfg(cfg)
+                "@anchor_ranges": [0, -32, 0, 52.8, 32.0, 0], # TBD in modify_cfg(cfg)
                 "@sizes": [0.6, 0.8, 1.73], # wlh
                 "@rotations": [0, 1.57],
                 "@match_threshold": 0.6,
@@ -555,12 +568,12 @@ class Test_filt_labels(unittest.TestCase):
         },
     }
     TRAINDATA_cfg = {
-        "dataset": "carla", # carla
+        "dataset": "kitti", # carla
         "training": False, # set this to false to avoid shuffle
         "batch_size": 1,
         "num_workers": 1,
-        "@root_path": "unit_tests/data/test_carladata",
-        "@info_path": "unit_tests/data/test_carladata/CARLA_infos_train.pkl",
+        "@root_path": "unit_tests/data/test_kittidata",
+        "@info_path": "unit_tests/data/test_kittidata/KITTI_infos_train.pkl",
         "@class_names": ["Car", "Pedestrian"],
         "prep": {
             "@training": True, # set this to True to return targets
@@ -569,11 +582,10 @@ class Test_filt_labels(unittest.TestCase):
             {
                 "keep_classes": ["Car", "Pedestrian"],
                 "min_num_pts": -1,
-                "label_range": [-35.2, -40, -1.5, 35.2, 40, 10],
+                "label_range": [0, -32, -3, 52.8, 32.0, 1],
                 # [min_x, min_y, min_z, max_x, max_y, max_z] FIMU
             },
-            "@feature_map_size": [1, 200, 176], # TBD
-            "@classes_to_exclude": []
+            "@feature_map_size": [1, 200, 176] # TBD
         }
     }
 
@@ -584,10 +596,6 @@ class Test_filt_labels(unittest.TestCase):
         def limit_period_torch(val, offset=0.5, period=np.pi):
             return val - torch.floor(val / period + offset) * period
         data_cfg = Test_prep_infos.TRAINDATA_cfg
-        data_cfg["prep_infos"] = {
-            "@valid_range": [-35.2, -40, -1.5, 35.2, 40, 2.6],
-            "@target_classes": ["Pedestrian"]
-        }
         voxelizer = voxelizer_builder.build(Test_exclude_classes.VOXELIZER_cfg)
         target_assigner = target_assigner_builder.build(Test_exclude_classes.TARGETASSIGNER_cfg)
         dataloader = build(data_cfg,
@@ -604,6 +612,8 @@ class Test_filt_labels(unittest.TestCase):
         from incdet3.utils.utils import filt_label_by_range
         for data in dataloader:
             tag = data["metadata"][0]["tag"]
+            if tag != "000006":
+                continue
             label = data["metadata"][0]["label"]
             cls_pred = torch.from_numpy(data["labels"]).cuda().float()
             cls_pred *= (cls_pred >= 0).float()
@@ -646,14 +656,19 @@ class Test_filt_labels(unittest.TestCase):
                     "scores": final_scores,
                     "label_preds": label_preds,
                 }
-                label_est = CarlaLabel()
+                label_est = KittiLabel()
+                calib = KittiCalib(f"unit_tests/data/test_kittidata/training/calib/{tag}.txt").read_calib_file()
                 for box3d_lidar, label_preds, score in zip(
                         predictions_dict["box3d_lidar"],
                         predictions_dict["label_preds"],
                         predictions_dict["scores"]):
-                    obj = CarlaObj()
+                    obj = KittiObj()
                     obj.type = "Car" if label_preds == 0 else "Pedestrian"
-                    obj.x, obj.y, obj.z, obj.w, obj.l, obj.h, obj.ry = box3d_lidar.cpu().numpy().flatten()
+                    xyzwlhry_Flidar = box3d_lidar.cpu().numpy().flatten()
+                    bcenter_Flidar = xyzwlhry_Flidar[:3].reshape(-1, 3)
+                    bcenter_Fcam = calib.lidar2leftcam(bcenter_Flidar)
+                    obj.x, obj.y, obj.z = bcenter_Fcam.flatten()
+                    obj.w, obj.l, obj.h, obj.ry = xyzwlhry_Flidar[3:]
                     obj.truncated = 0
                     obj.occluded = 0
                     obj.alpha = 0
@@ -662,10 +677,9 @@ class Test_filt_labels(unittest.TestCase):
                     obj.bbox_r = 0
                     obj.bbox_b = 0
                     label_est.add_obj(obj)
-                label_est.current_frame = "IMU"
-                if tag == "000206":
-                    label_filt = filt_label_by_range(label_est, valid_range=[-35.2, -40, -1.5, 35.2, 4.02, 2.6])
-                    self.assertTrue(len(label_filt) == 10)
+                label_est.current_frame = "Cam2"
+                label_filt = filt_label_by_range(label_est, valid_range=[20, -35.2, -3, 52.8, 12.85, -0.26], calib=calib)
+                self.assertTrue(len(label_filt) == 1)
 
 if __name__ == "__main__":
     unittest.main()
