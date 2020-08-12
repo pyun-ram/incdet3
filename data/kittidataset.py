@@ -67,7 +67,8 @@ class KittiDataset:
         val_image_ids = [int(itm.split(".")[0]) for itm in val_image_ids]
         val_image_ids.sort()
         gt_annos = kitti.get_label_annos(gt_path, val_image_ids)
-        cls_to_idx = {"Car": 0, "Pedestrian": 1, "Cyclist": 2, "Van": 3}
+        cls_to_idx = {"Car": 0, "Pedestrian": 1, "Cyclist": 2, "Van": 3,
+        "Truck": 4, "Tram": 5, "Person_sitting": 6}
         current_classes = [cls_to_idx[itm] for itm in self._class_names]
         val_ap_dict = get_official_eval_result(gt_annos, dt_annos, current_classes)
         return val_ap_dict

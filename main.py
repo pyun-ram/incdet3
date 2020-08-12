@@ -363,6 +363,9 @@ def log_test_info(info, log_dir):
     os.makedirs(log_val_dir, exist_ok=True)
     write_pkl(detections, os.path.join(log_val_dir, "test_detections.pkl"))
     write_pkl(eval_res, os.path.join(log_val_dir, "test_results.pkl"))
+    if "result" in eval_res.keys():
+        Logger().log_txt(str(eval_res['result']))
+        return
     if "carla" in eval_res["results"].keys():
         Logger().log_txt(str(eval_res['results']['carla']))
     elif "nusc" in eval_res["results"].keys():
