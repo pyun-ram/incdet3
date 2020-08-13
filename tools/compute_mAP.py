@@ -6,7 +6,14 @@
     --log-dir logs/July14-expcarlamore/July14-expcarlamore-lwf-cv0 \
     --val-pkl-path /usr/app/data/CARLA-TOWN01CARPEDCYC/CARLA_infos_val0.pkl \
     --valid-range -35.2 -40 -1.5 35.2 40 2.6 \
-    --valid-classes Car,Pedestrian,Cyclist
+    --valid-classes Car,Pedestrian,Cyclist \
+    --dataset carla
+ python3 tools/compute_mAP.py \
+    --log-dir logs/20200812-expkitti4+1/20200812-expkitti4+1-lwf \
+    --val-pkl-path /usr/app/data/KITTI/KITTI_infos_val.pkl \
+    --valid-range 0 -32.0 -3 52.8 32.0 1 \
+    --valid-classes Car,Pedestrian,Cyclist,Van,Truck \
+    --dataset kitti
 
 '''
 import argparse
@@ -18,29 +25,40 @@ import os
 g_config_dict = {
     "Car": "3d@0.50",
     "Pedestrian": "3d@0.25",
-    "Cyclist": "3d@0.25"
+    "Cyclist": "3d@0.25",
+    "Van": "3d@0.50",
+    "Truck": "3d@0.50",
 }
 
-def main(log_dir, val_pkl_path, valid_range, valid_classes):
+def main(log_dir, val_pkl_path, valid_range, valid_classes, dataset):
     # compute num of cars and num of pedes
     acc_dict = {itm: 0 for itm in valid_classes}
     ## load val pkl
     val_pkl = read_pkl(val_pkl_path)
     for itm in val_pkl:
         label = itm['label']
-        label_ = filt_label_by_range(label, valid_range)
-        ## accumulate
-        for obj in label_.data:
-            acc_dict[obj.type] += 1
+        calib = itm['calib'] if dataset == "kitti" else None
+        # compute weights by the number of data samples
+        # instead of computing weights by the number of instances
+        label_ = filt_label_by_range(label, valid_range, calib)
+        if len(label_) == 0:
+            continue
+        has_classes = [obj.type for obj in label_.data]
+        has_classes = list(set(has_classes))
+        for cls in has_classes:
+            if cls in valid_classes:
+                acc_dict[cls] += 1
+
     print(acc_dict)
     # get all eval_pkl_list
     global g_config_dict
-    eval_pkl_list = glob(os.path.join(log_dir, '*00'))
+    eval_pkl_list = glob(os.path.join(log_dir, '[0-9]*'))
     eval_pkl_list = [os.path.join(itm, 'val_eval_res.pkl') for itm in eval_pkl_list]
     max_eval_pkl = (None, 0)
     for eval_pkl_path in eval_pkl_list:
         res_pkl = read_pkl(eval_pkl_path)
-        res_pkl = res_pkl['detail']['eval.carla']['carla']
+        res_pkl = (res_pkl['detail']
+            if dataset == "kitti" else res_pkl['detail']['eval.carla']['carla'])
         calc_map_dict = {itm: None for itm in valid_classes}
         for cls in valid_classes:
             eval_attrib = g_config_dict[cls]
@@ -56,8 +74,6 @@ def main(log_dir, val_pkl_path, valid_range, valid_classes):
         print(eval_pkl_path, f"{map_val:.2f}")
     print("Max:", f"{max_eval_pkl}")
 
-
-
 if __name__ == "__main__":
     # argparse: log_dir, val_pkl_path, valid_range, valid_classes
     parser = argparse.ArgumentParser(description='Compute mAP from evaluation pkls.')
@@ -68,14 +84,17 @@ if __name__ == "__main__":
                             help="", type=float,
                             default=None)
     parser.add_argument('--valid-classes', type=str, help='e.g. Car,Pedestrian')
+    parser.add_argument('--dataset', type=str, help='e.g. carla or kitti')
     args = parser.parse_args()
     log_dir = args.log_dir
     val_pkl_path = args.val_pkl_path
     # valid_range = tuple(*(args.valid_range.split(",")))
     valid_range = args.valid_range
     valid_classes = args.valid_classes.split(",")
+    dataset = args.dataset
+    assert dataset in ["kitti", "carla"], f"{dataset} is not supported"
     # assert len(valid_range) == 6
     # for i in range(3):
     #     assert valid_range[i] < valid_range[i+3]
-    print(log_dir, val_pkl_path, valid_range, valid_classes)
-    main(log_dir, val_pkl_path, valid_range, valid_classes)
+    print(log_dir, val_pkl_path, valid_range, valid_classes, dataset)
+    main(log_dir, val_pkl_path, valid_range, valid_classes, dataset)
