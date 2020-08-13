@@ -37,7 +37,7 @@ cfg.VOXELIZER = {
 
 cfg.TARGETASSIGNER = {
     "type": "TaskAssignerV1",
-    "@classes": ["Car", "Pedestrian", "Cyclist", "Van"],
+    "@classes": ["Car", "Pedestrian", "Cyclist", "Van", "Truck"],
     "@feature_map_sizes": None,
     "@positive_fraction": None,
     "@sample_size": 512,
@@ -84,7 +84,7 @@ cfg.TRAINDATA = {
     },
     "prep_infos": {
         "@valid_range": cfg.TASK["valid_range"],
-        "@target_classes": ["Car", "Pedestrian", "Cyclist", "Van"]
+        "@target_classes": ["Car", "Pedestrian", "Cyclist", "Van", "Truck"]
     }
 }
 
@@ -106,7 +106,7 @@ cfg.VALDATA = {
     },
     "prep_infos": {
         "@valid_range": cfg.TASK["valid_range"],
-        "@target_classes": ["Car", "Pedestrian", "Cyclist", "Van"]
+        "@target_classes": ["Car", "Pedestrian", "Cyclist", "Van", "Truck"]
     }
 }
 
@@ -124,11 +124,11 @@ cfg.TESTDATA = {
         "@augment_dict": None,
         "@filter_label_dict": dict(),
         "@feature_map_size": None # TBD in dataloader_builder.py
-    },
+    }
 }
 
 cfg.NETWORK = {
-    "@classes_target": ["Car", "Pedestrian", "Cyclist", "Van"],
+    "@classes_target": ["Car", "Pedestrian", "Cyclist", "Van", "Truck"],
     "@classes_source": None,
     "@model_resume_dict": None,
     "@sub_model_resume_dict": None,
