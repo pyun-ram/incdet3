@@ -6,8 +6,8 @@ cfg = edict()
 
 cfg.TASK = {
     "valid_range": [0, -32.0, -3, 52.8, 32.0, 1],
-    "total_training_steps": ${ckpt_steps},
-    "continue_training_steps": int(${num_of_samples}/8 * 100),
+    "total_training_steps": 37197,
+    "continue_training_steps": int(387/8 * 100),
     "use_fp16": False,
 }
 
@@ -15,8 +15,8 @@ cfg.TRAIN = {
     "train_iter": (cfg.TASK["total_training_steps"]
         + cfg.TASK["continue_training_steps"]),
     "num_log_iter": 40,
-    "num_val_iter": int(${num_of_samples}/8 * 5),
-    "num_save_iter": int(${num_of_samples}/8 * 5),
+    "num_val_iter": int(387/8 * 5),
+    "num_save_iter": int(387/8 * 5),
     "optimizer_dict":{
         "type": "adam",
         "init_lr": 1e-4,
@@ -136,7 +136,7 @@ cfg.NETWORK = {
     "@classes_target": ["Car", "Pedestrian", "Cyclist", "Van", "Truck"],
     "@classes_source": None,
     "@model_resume_dict": {
-        "ckpt_path": "saved_weights/20200815-expkitti2+seq-saved_weights/train_class4-finetuning-${ckpt_steps}.tckpt",
+        "ckpt_path": "saved_weights/20200815-expkitti2+seq-saved_weights/train_class4-finetuning-37197.tckpt",
         "num_classes": 4,
         "num_anchor_per_loc": 8,
         "partially_load_params": [

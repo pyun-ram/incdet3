@@ -6,7 +6,7 @@ cfg = edict()
 
 cfg.TASK = {
     "valid_range": [0, -32.0, -3, 52.8, 32.0, 1],
-    "total_training_steps": ${ckpt_steps},
+    "total_training_steps": 63200,
     "continue_training_steps": 20e3,
     "use_fp16": False,
 }
@@ -136,7 +136,7 @@ cfg.NETWORK = {
     "@classes_target": ["Car", "Pedestrian", "Cyclist", "Van", "Truck"],
     "@classes_source": None,
     "@model_resume_dict": {
-        "ckpt_path": "saved_weights/20200815-expkitti2+seq-saved_weights/train_class4-jointtraining-${ckpt_steps}.tckpt",
+        "ckpt_path": "saved_weights/20200815-expkitti2+seq-saved_weights/train_class4-jointtraining-63200.tckpt",
         "num_classes": 4,
         "num_anchor_per_loc": 8,
         "partially_load_params": [
