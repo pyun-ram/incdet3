@@ -6,7 +6,7 @@ cfg = edict()
 
 cfg.TASK = {
     "valid_range": [0, -32.0, -3, 52.8, 32.0, 1],
-    "total_training_steps": 464 * 50,
+    "total_training_steps": 464 * 50 * 2,
     "use_fp16": False,
 }
 
