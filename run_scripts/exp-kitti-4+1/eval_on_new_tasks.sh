@@ -19,7 +19,7 @@ CUDA_VISIBLE_DEVICES=$1 python3 main.py \
     --cfg-path configs/exp-kitti-4+1/B5finetuningnew-eval.py \
     --mode test
 
-CUDA_VISIBLE_DEVICES=$1 python3 main.py \
-    --tag 20200818-expkitti4+1-A1to5new-eval \
-    --cfg-path configs/exp-kitti-4+1/A1to5new-eval.py \
-    --mode test
+# CUDA_VISIBLE_DEVICES=$1 python3 main.py \
+#     --tag 20200818-expkitti4+1-A1to5new-eval \
+#     --cfg-path configs/exp-kitti-4+1/A1to5new-eval.py \
+#     --mode test
