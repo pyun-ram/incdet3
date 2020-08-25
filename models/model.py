@@ -49,7 +49,8 @@ class Network(nn.Module):
         hook_layers=[],
         distillation_mode=[],
         bool_reuse_anchor_for_cls=True,
-        bool_biased_select_with_submodel=False,
+        bool_biased_select_with_submodel=False, # decorated
+        distillation_loss_sampling_strategy="biased",
         bool_oldclassoldanchor_predicts_only=False,
         bool_delta_use_mask=False,
         post_center_range=[],
@@ -93,7 +94,9 @@ class Network(nn.Module):
         self._distillation_loss_reg_coef = distillation_loss_reg_coef
         self._num_biased_select = num_biased_select
         self._threshold_delta_fgmask = threshold_delta_fgmask
-        self._bool_biased_select_with_submodel = bool_biased_select_with_submodel
+        self._distillation_loss_sampling_strategy = distillation_loss_sampling_strategy
+        Logger.log_txt(f"Network._bool_biased_select_with_submodel has been decorated."
+                      +f"We do sampling according to submodel outputs.")
         self._bool_oldclassoldanchor_predicts_only = bool_oldclassoldanchor_predicts_only
         self._post_center_range = post_center_range
         self._nms_score_thresholds = nms_score_thresholds
@@ -828,7 +831,9 @@ class Network(nn.Module):
         return mask
 
     def _compute_distillation_loss(self, preds_dict, preds_dict_sub):
-        def _compute_weights(cls_preds, num_select=32):
+        def _compute_weights(cls_preds,
+            num_select=32,
+            sampling_strategy="biased"):
             '''
             @cls_preds: [batch_size, num_anchor, H, W, num_classes] logits
             -> weights [batch_size, num_anchor]
@@ -840,10 +845,32 @@ class Network(nn.Module):
             weights = torch.zeros(batch_size, num_anchor,
                 dtype=cls_preds.dtype,
                 device=torch.device("cuda:0"))
-            for i in range(batch_size):
-                fg_score_, _ = torch.max(fg_score[i, ...], dim=-1)
-                tmp, indices = torch.topk(fg_score_, num_select)
-                weights[i, indices] = 1
+            if sampling_strategy == "biased":
+                for i in range(batch_size):
+                    fg_score_, _ = torch.max(fg_score[i, ...], dim=-1)
+                    tmp, indices = torch.topk(fg_score_, num_select)
+                    weights[i, indices] = 1
+            elif sampling_strategy == "unbiased":
+                for i in range(batch_size):
+                    fg_score_, _ = torch.max(fg_score[i, ...], dim=-1)
+                    indices = torch.randperm(
+                        num_anchor,
+                        device=torch.device("cuda:0"),
+                        requires_grad=False)
+                    indices = indices[:num_select]
+                    weights[i, indices] = 1
+            elif sampling_strategy == "all":
+                weights = torch.ones(batch_size, num_anchor,
+                dtype=cls_preds.dtype,
+                device=torch.device("cuda:0"))
+            elif sampling_strategy == "threshold":
+                threshold = 0.1
+                for i in range(batch_size):
+                    fg_score_, _ = torch.max(fg_score[i, ...], dim=-1)
+                    indices = torch.nonzero(fg_score > threshold)
+                    weights[i, indices] = 1
+            else:
+                raise NotImplementedError
             return weights
 
         batch_size = preds_dict["cls_preds"].shape[0]
@@ -856,12 +883,12 @@ class Network(nn.Module):
             .reshape(batch_size, -1, num_old_classes))
         cls_target = (preds_dict_sub["cls_preds"].detach()
             .reshape(batch_size, -1, num_old_classes))
-        if self._bool_biased_select_with_submodel:
-            weights = _compute_weights(
-                cls_target, num_select=self._num_biased_select)
-        else:
-            weights = _compute_weights(
-                cls_output, num_select=self._num_biased_select)
+        assert (self._distillation_loss_sampling_strategy in ["biased",
+            "unbiased", "threshold", "all"],
+            f"{self._distillation_loss_sampling_strategy} is not supported.")
+        weights = _compute_weights(cls_target,
+            sampling_strategy=self._distillation_loss_sampling_strategy,
+            num_select=self._num_biased_select)
         batch_size = preds_dict["cls_preds"].shape[0]
         cls_loss = self._distillation_loss_cls_ftor(
             cls_output, cls_target, weights=weights)
