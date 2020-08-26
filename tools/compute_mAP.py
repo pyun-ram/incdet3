@@ -9,12 +9,11 @@
     --valid-classes Car,Pedestrian,Cyclist \
     --dataset carla
  python3 tools/compute_mAP.py \
-    --log-dir logs/20200813-expkitti2+3/20200813-expkitti2+3-train_class2 \
+    --log-dir logs/20200825-expkitti2+seq/20200825-expkitti2+seq-lwf5_threshold \
     --val-pkl-path /usr/app/data/KITTI/KITTI_infos_val.pkl \
     --valid-range 0 -32.0 -3 52.8 32.0 1 \
-    --valid-classes Car,Pedestrian \
+    --valid-classes Car,Pedestrian,Cyclist,Van,Truck \
     --dataset kitti
-
 '''
 import argparse
 from glob import glob
