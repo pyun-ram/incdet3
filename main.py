@@ -77,7 +77,7 @@ def setup_cores(cfg, mode):
         if use_fp16:
             network, optimizer = amp.initialize(network, optimizer, opt_level="O2")
         g_use_fp16 = use_fp16
-    else:
+    elif mode == "test":
         # build dataloader_train
         voxelizer = build_voxelizer(cfg.VOXELIZER)
         target_assigner = build_target_assigner(cfg.TARGETASSIGNER)
@@ -101,6 +101,28 @@ def setup_cores(cfg, mode):
         network = Network(**param).cuda()
         # build optimizer & lr_scheduler
         optimizer, lr_scheduler = None, None
+    elif mode == "compute_ewc_weights":
+        voxelizer = build_voxelizer(cfg.VOXELIZER)
+        target_assigner = build_target_assigner(cfg.TARGETASSIGNER)
+        dataloader_train = build_dataloader(
+            data_cfg=cfg.TRAINDATA,
+            ext_dict={
+                "voxelizer": voxelizer,
+                "target_assigner": target_assigner,
+                "feature_map_size": cfg.TRAINDATA["feature_map_size"]})
+        dataloader_val, dataloader_test = None, None
+        # build model
+        param = cfg.NETWORK
+        param["@middle_layer_dict"]["@output_shape"] = [1] + voxelizer.grid_size[::-1].tolist() + [16]
+        param["@is_training"] = True
+        param["@box_coder"] = target_assigner.box_coder
+        param = {proc_param(k): v
+            for k, v in param.items() if is_param(k)}
+        network = Network(**param).cuda()
+        # build optimizer & lr_scheduler
+        optimizer, lr_scheduler = None, None
+    else:
+        raise NotImplementedError
     cores = {
         "dataloader_train": dataloader_train,
         "dataloader_val": dataloader_val,
@@ -427,6 +449,23 @@ def test(cfg):
     test_info = test_one_epoch(model, dataloader_test)
     log_test_info(test_info, model.get_global_step())
 
+def compute_ewc_weights(cfg):
+    global g_log_dir, g_save_dir
+    cores = setup_cores(cfg, mode="compute_ewc_weights")
+    model = cores["model"]
+    dataloader_train = cores["dataloader_train"]
+    if "@num_of_datasamples" in cfg.EWC.keys():
+        num_of_datasamples = cfg.EWC["@num_of_datasamples"]
+    else:
+        num_of_datasamples = len(dataloader_train.dataset)
+    params = {proc_param(k): v
+              for k, v in cfg.EWC.items() if is_param(k)}
+    params["num_of_datasamples"] = num_of_datasamples
+    params["dataloader"] = dataloader_train
+    ewc_weights = model.compute_ewc_weights(**params)
+    write_pkl({k: v.cpu().numpy() for k, v in ewc_weights.items()},
+        os.path.join(g_save_dir, f"ewc_weights-{model.get_global_step()}.pkl"))
+
 def setup_dir_and_logger(tag):
     global g_log_dir, g_save_dir
     root_dir = "./"
@@ -465,7 +504,7 @@ if __name__ == "__main__":
                         type=str, metavar='CFG',
                         help='config file path')
     parser.add_argument('--mode',
-        choices = ['train', 'test', 'compute_channel_weights'],
+        choices = ['train', 'test', 'compute_channel_weights', 'compute_ewc_weights'],
         default = 'test')
     args = parser.parse_args()
     cfg_path = args.cfg_path
@@ -482,5 +521,7 @@ if __name__ == "__main__":
         test(cfg)
     elif args.mode == "compute_channel_weights":
         raise NotImplementedError
+    elif args.mode == "compute_ewc_weights":
+        compute_ewc_weights(cfg)
     else:
         raise NotImplementedError

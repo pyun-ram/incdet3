@@ -37,7 +37,7 @@ cfg.VOXELIZER = {
 
 cfg.TARGETASSIGNER = {
     "type": "TaskAssignerV1",
-    "@classes": ["Car", "Pedestrian", "Cyclist", "Van"],
+    "@classes": ["Car", "Pedestrian"],
     "@feature_map_sizes": None,
     "@positive_fraction": None,
     "@sample_size": 512,
@@ -51,7 +51,7 @@ cfg.TARGETASSIGNER = {
 cfg.TRAINDATA = {
     "dataset": "kitti", # carla, nusc, kitti
     "training": True,
-    "batch_size": 8,
+    "batch_size": 6,
     "num_workers": 8,
     "feature_map_size": [1, 160, 132],
     "@root_path": "/usr/app/data/KITTI/training",
@@ -82,10 +82,10 @@ cfg.TRAINDATA = {
         "@feature_map_size": None, # TBD in dataloader_builder.py
         "@classes_to_exclude": []
     },
-    # "prep_infos": {
-    #     "@valid_range": cfg.TASK["valid_range"],
-    #     "@target_classes": ["Pedestrian"]
-    # }
+    "prep_infos": {
+        "@valid_range": cfg.TASK["valid_range"],
+        "@target_classes": ["Car", "Pedestrian"]
+    }
 }
 
 
@@ -103,6 +103,10 @@ cfg.VALDATA = {
         "@augment_dict": None,
         "@filter_label_dict": dict(),
         "@feature_map_size": None # TBD in dataloader_builder.py
+    },
+    "prep_infos": {
+        "@valid_range": cfg.TASK["valid_range"],
+        "@target_classes": ["Car", "Pedestrian"]
     }
 }
 
@@ -120,13 +124,23 @@ cfg.TESTDATA = {
         "@augment_dict": None,
         "@filter_label_dict": dict(),
         "@feature_map_size": None # TBD in dataloader_builder.py
-    }
+    },
 }
 
 cfg.NETWORK = {
-    "@classes_target": ["Car", "Pedestrian", "Cyclist", "Van"],
+    "@classes_target": ["Car", "Pedestrian"],
     "@classes_source": None,
-    "@model_resume_dict": None,
+    "@model_resume_dict": {
+        "ckpt_path": "saved_weights/20200815-expkitti2+seq-saved_weights/train_class2-23200.tckpt",
+        "num_classes": 2,
+        "num_anchor_per_loc": 4,
+        "partially_load_params": [
+            "rpn.conv_cls.weight", "rpn.conv_cls.bias",
+            "rpn.conv_box.weight", "rpn.conv_box.bias",
+            "rpn.conv_dir_cls.weight", "rpn.conv_dir_cls.bias",
+        ],
+        "ignore_params": [],
+    },
     "@sub_model_resume_dict": None,
     "@voxel_encoder_dict": {
         "name": "SimpleVoxel",
@@ -215,10 +229,11 @@ cfg.NETWORK = {
 
 cfg.EWC = {
     "@num_of_datasamples": 200,
-    "@num_of_anchorsamples": 32,
+    "@num_of_anchorsamples": 6*32,
     "@anchor_sample_strategy": "biased",
-    "@reg_sigma_prior": 0.1,
+    "@reg_sigma_prior": 50,
 }
+
 def modify_cfg(cfg_):
     # add class_settings
     class_list = cfg_.TARGETASSIGNER["@classes"]
@@ -231,24 +246,39 @@ def modify_cfg(cfg_):
         for i, itm in enumerate(cfg_.TASK["valid_range"])],
         "Van": [itm if i not in [2, 5] else -1.41
         for i, itm in enumerate(cfg_.TASK["valid_range"])],
+        "Truck": [itm if i not in [2, 5] else -1.6
+        for i, itm in enumerate(cfg_.TASK["valid_range"])],
+        "Tram": [itm if i not in [2, 5] else -1.2
+        for i, itm in enumerate(cfg_.TASK["valid_range"])],
+        "Person_sitting": [itm if i not in [2, 5] else -1.5
+        for i, itm in enumerate(cfg_.TASK["valid_range"])],
     }
     class2anchor_size = {
         "Car": [1.6, 3.9, 1.56],
         "Pedestrian": [0.6, 0.8, 1.73],
         "Cyclist": [0.6, 1.76, 1.73],
         "Van": [1.87103749, 5.02808195, 2.20964255],
+        "Truck": [2.60938525, 9.20477459, 3.36219262],
+        "Tram": [2.36035714, 15.55767857,  3.529375],
+        "Person_sitting": [0.54357143, 1.06392857, 1.27928571]
     }
     class2anchor_match_th = {
         "Car": 0.6,
         "Pedestrian": 0.35,
         "Cyclist": 0.35,
         "Van": 0.6,
+        "Truck": 0.6,
+        "Tram": 0.6,
+        "Person_sitting": 0.35
     }
     class2anchor_unmatch_th = {
         "Car": 0.45,
         "Pedestrian": 0.2,
         "Cyclist": 0.2,
         "Van": 0.45,
+        "Truck": 0.45,
+        "Tram": 0.45,
+        "Person_sitting": 0.2
     }
     for cls in class_list:
         key = f"class_settings_{cls}"

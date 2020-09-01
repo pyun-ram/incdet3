@@ -2,13 +2,14 @@
 network needs to handle the following training schemes (by set train/val & require_grad):
 "feature extraction", "fine-tuning", "joint training", "lwf"
 network needs to handle different distillation schemes
-"l2sp" (loss), "delta" (loss + hook), "distillation loss" (loss + hook)
+"l2sp" (loss), "delta" (loss + hook), "distillation loss" (loss + hook), "ewc" (loss)
 To be compatible with "delta", we need to change the rpn part to resnet.
 '''
 import torch
 import torch.nn as nn
 import numpy as np
 from pathlib import Path
+from tqdm import tqdm
 from det3.utils.log_tool import Logger
 from det3.utils.utils import is_param, proc_param
 from det3.methods.second.models.voxel_encoder import get_vfe_class
@@ -16,9 +17,12 @@ from det3.methods.second.models.middle import get_middle_class
 from det3.methods.second.core.model_manager import save_models
 from det3.methods.second.models.losses import get_loss_class
 from det3.methods.second.core.second import add_sin_difference, get_direction_target
+from det3.methods.second.ops.torch_ops import rotate_nms
+from det3.ops import read_pkl
 from incdet3.models.rpn import get_rpn_class
 from incdet3.utils.utils import bcolors
-from det3.methods.second.ops.torch_ops import rotate_nms
+from incdet3.builders.dataloader_builder import example_convert_to_torch
+
 
 class Network(nn.Module):
     HEAD_NEAMES = ["rpn.conv_cls", "rpn.conv_box", "rpn.conv_dir_cls"]
@@ -58,7 +62,9 @@ class Network(nn.Module):
         nms_pre_max_sizes=[],
         nms_post_max_sizes=[],
         nms_iou_thresholds=[],
-        box_coder=None
+        box_coder=None,
+        ewc_weights_path=None,
+        ewc_coef=1.0,
         ):
         super().__init__()
         self._model = None
@@ -92,6 +98,7 @@ class Network(nn.Module):
         self._delta_coef = delta_coef
         self._distillation_loss_cls_coef = distillation_loss_cls_coef
         self._distillation_loss_reg_coef = distillation_loss_reg_coef
+        self._ewc_coef = ewc_coef
         self._num_biased_select = num_biased_select
         self._threshold_delta_fgmask = threshold_delta_fgmask
         self._distillation_loss_sampling_strategy = distillation_loss_sampling_strategy
@@ -151,6 +158,9 @@ class Network(nn.Module):
         if "delta" in self._distillation_mode:
             self._channel_weights = None # TBD
             self._bool_delta_use_mask = bool_delta_use_mask
+
+        if "ewc" in self._distillation_mode:
+            self._ewc_weights = self._load_ewc_weights(ewc_weights_path)
 
         self._model = Network._build_model_and_init(
             classes=self._classes_target,
@@ -481,6 +491,18 @@ class Network(nn.Module):
         Logger.log_txt("Missing Keys {}.".format(missing_keys))
         Logger.log_txt("Unexpected Keys from {}.".format(unexpected_keys))
 
+    def _load_ewc_weights(self, path):
+        '''
+        load ewc_weights from path
+        @path: pkl path
+        -> ewc_weights: {name: torch.FloatTensor.cuda}
+        '''
+        ewc_weights = read_pkl(path)
+        ewc_weights_ts = {name: torch.from_numpy(param).cuda()
+        for name, param in ewc_weights.items() }
+        print(f"loading ewc weights from {path}")
+        return ewc_weights_ts
+
     @staticmethod
     def save_weight(model, save_dir, itr):
         save_models(save_dir, [model],
@@ -530,6 +552,8 @@ class Network(nn.Module):
         loss_dict["loss_l2"] = self._compute_l2_loss()
         if "l2sp" in self._distillation_mode:
             loss_dict["loss_l2sp"] = self._compute_l2sp_loss()
+        if "ewc" in self._distillation_mode:
+            loss_dict["loss_ewc"] = self._compute_ewc_loss()
         if "delta" in self._distillation_mode:
             preds_dict_sub = self._network_forward(self._sub_model,
                 example["voxels"],
@@ -555,7 +579,7 @@ class Network(nn.Module):
             loss_dict["loss_distillation_loss_cls"] = loss_dl["loss_distillation_loss_cls"]
             loss_dict["loss_distillation_loss_reg"] = loss_dl["loss_distillation_loss_reg"]
         for k, v in loss_dict.items():
-            if k in ["loss_l2", "loss_l2sp"]:
+            if k in ["loss_l2", "loss_l2sp", "loss_ewc"]:
                 loss_dict[k] = v.sum()
             else:
                 loss_dict[k] = v.sum() / batch_size_dev
@@ -747,6 +771,45 @@ class Network(nn.Module):
         batch_size = int(est.shape[0])
         est_dir = est.view(batch_size, -1, 2)
         return self._dir_cls_loss_ftor(est_dir, gt, weights=weights)
+
+    def _compute_ewc_loss(self):
+        loss_alpha = 0
+        assert self._training_mode not in ["train_from_scratch", "feature_extraction"]
+        # loss_beta = 0
+        sub_model_weights = self._sub_model.state_dict()
+        num_old_classes = self._num_old_classes
+        num_old_anchor_per_loc = self._num_old_anchor_per_loc
+        num_new_classes = self._num_new_classes
+        num_new_anchor_per_loc = self._num_new_anchor_per_loc
+        for name, param in self._model.named_parameters():
+            is_head = any([name.startswith(headname) for headname in Network.HEAD_NEAMES])
+            if not is_head:
+                diff = param - sub_model_weights[name].detach()
+                diff = diff ** 2
+                loss_alpha += 0.5 * (self._ewc_weights[name] * diff).sum()
+            else:
+                compute_param_shape = param.shape
+                if name.startswith("rpn.conv_cls"):
+                    compute_param = param.reshape(num_new_anchor_per_loc,
+                        num_new_classes, *compute_param_shape[1:])
+                    compute_oldparam = compute_param[:num_old_anchor_per_loc,
+                        :num_old_classes, ...].reshape(-1, *compute_param_shape[1:]).contiguous()
+                elif name.startswith("rpn.conv_box"):
+                    compute_param = param.reshape(num_new_anchor_per_loc,
+                        7, *compute_param_shape[1:])
+                    compute_oldparam = compute_param[:num_old_anchor_per_loc,
+                        ...].reshape(-1, *compute_param_shape[1:]).contiguous()
+                elif name.startswith("rpn.conv_dir_cls"):
+                    compute_param = param.reshape(num_new_anchor_per_loc,
+                        2, *compute_param_shape[1:])
+                    compute_oldparam = compute_param[:num_old_anchor_per_loc,
+                        ...].reshape(-1, *compute_param_shape[1:]).contiguous()
+                else:
+                    raise NotImplementedError
+                diff = compute_oldparam - sub_model_weights[name].detach()
+                diff = diff ** 2
+                loss_alpha += 0.5 * (self._ewc_weights[name] * diff).sum()
+        return self._ewc_coef * loss_alpha
 
     def _compute_l2sp_loss(self):
         loss_alpha = 0
@@ -1049,6 +1112,184 @@ class Network(nn.Module):
                 }
             predictions_dicts.append(predictions_dict)
         return predictions_dicts
+
+    def compute_ewc_weights(self,
+        dataloader,
+        num_of_datasamples,
+        num_of_anchorsamples,
+        anchor_sample_strategy,
+        reg_sigma_prior=0.1):
+        '''
+        compute ewc weights after training
+        @dataloader: torch.Dataloader (shuffled)
+        @num_of_samples: int
+        -> ewc_weights {name: param (torch.FloatTensor.cuda)}
+        '''
+        def _init_ewc_weights(model_sd):
+            '''
+            init ewc_weights from model state_dict
+            @model_sd: nn.Module.state_dict()
+            -> ewc_weights: dict {name: torch.FloatTensor.cuda (zeros)}
+            '''
+            ewc_weights = {}
+            for name, param in model_sd.items():
+                ewc_weights[name] = torch.zeros_like(param)
+            return ewc_weights
+
+        def _sampling_ewc(cls_preds,
+            box_preds,
+            sample_strategy="all",
+            num_of_samples=None):
+            '''
+            sampling from cls_preds and box_preds according to sample_strategy
+            @cls_preds: torch.FloatTensor.cuda
+                [batch_size, num_of_anchors, num_of_classes]
+            @reg_preds: torch.FloatTensor.cuda
+                [batch_size, num_of_anchors, 7]
+            @sample_strategy: str: "all", "biased", "unbiased"
+            @num_of_samples: None if not applicable
+            -> selected_cls: torch.FloatTensor.cuda
+                [num_of_samples, num_of_classes]
+            -> selected_box: torch.FloatTensor.cuda
+                [num_of_samples, 7]
+            '''
+            num_of_classes = cls_preds.shape[-1]
+            size_of_reg_encode = box_preds.shape[-1]
+            batch_size = cls_preds.shape[0]
+            if sample_strategy == "all":
+                all_cls = cls_preds.reshape(-1, num_of_classes)
+                all_box = box_preds.reshape(-1, size_of_reg_encode)
+                assert all_cls.shape[0] == all_box.shape[0]
+                selected_cls, selected_box = all_cls, all_box
+            elif sample_strategy == "biased":
+                assert num_of_samples >= batch_size
+                selected_cls = []
+                selected_box = []
+                for i in range(batch_size):
+                    fg_score, _ = cls_preds[i, ...].max(dim=-1)
+                    tmp, indices = torch.topk(fg_score, num_of_samples//batch_size)
+                    selected_cls.append(cls_preds[i, indices, :])
+                    selected_box.append(box_preds[i, indices, :])
+                selected_cls = torch.cat(selected_cls, dim=0)
+                selected_box = torch.cat(selected_box, dim=0)
+            elif sample_strategy == "unbiased":
+                all_cls = cls_preds.reshape(-1, num_of_classes)
+                all_box = box_preds.reshape(-1, size_of_reg_encode)
+                assert all_cls.shape[0] == all_box.shape[0]
+                indices = torch.randperm(
+                    all_cls.shape[0],
+                    device=torch.device("cuda:0"),
+                    requires_grad=False)
+                indices = indices[:num_of_samples]
+                selected_cls = all_cls[indices, :]
+                selected_box = all_box[indices, :]
+            else:
+                raise NotImplementedError
+            return selected_cls, selected_box
+
+        def _compute_FIM_cls_term(cls_preds, model):
+            '''
+            compute the FIM classification term
+            @cls_preds: torch.FloatTensor.cuda
+                [num_of_anchors, num_of_classes]
+            @model: nn.Module
+            -> cls_term:dict {name: torch.FloatTensor.cuda}
+            '''
+            cls_term = _init_ewc_weights(model.state_dict())
+            num_anchors = cls_preds.shape[0]
+            num_cls = cls_preds.shape[1]
+            for logit in cls_preds:
+                prob = torch.softmax(logit, dim=-1)
+                for cls in range(num_cls):
+                    model.zero_grad()
+                    log_prob = torch.log(prob[cls])
+                    log_prob.backward(retain_graph=True)
+                    for name, param in model.named_parameters():
+                        grad = param.grad if param.grad is not None else 0
+                        cls_term[name] += (grad **2 * prob[cls].detach()).detach()
+            for name, _ in model.named_parameters():
+                cls_term[name] /= num_anchors
+                # print(name, float(cls_term[name].mean()))
+            return cls_term
+
+        def _compute_FIM_reg_term(reg_preds, model, sigma_prior=0.1):
+            '''
+            compute the FIM regression term
+            @reg_preds: torch.FloatTensor.cuda
+                [num_of_anchors, 7]
+            @model: nn.Module
+            -> reg_term:dict {name: torch.FloatTensor.cuda}
+            '''
+            reg_term = _init_ewc_weights(model.state_dict())
+            num_anchors = reg_preds.shape[0]
+            for reg_output in reg_preds:
+                for reg_output_ in reg_output:
+                    model.zero_grad()
+                    reg_output_.backward(retain_graph=True)
+                    for name, param in model.named_parameters():
+                        grad = param.grad if param.grad is not None else torch.zeros(1,
+                            device=torch.device("cuda:0"), requires_grad=False)
+                        reg_term[name] += (grad**2).detach() / (sigma_prior**2)
+            for name, _ in model.named_parameters():
+                reg_term[name] /= num_anchors
+                # print(name, float(reg_term[name].mean()))
+            return reg_term
+
+        def _update_ewc_weights(old_ewc_weights, cls_term, reg_term, accum_idx):
+            '''
+            update ewc_weights
+            @old_ewc_weights, cls_term, reg_term:
+                dict{name: param}
+            '''
+            new_ewc_weights = {}
+            for name, _ in cls_term.items():
+                new_ewc_weights[name] = cls_term[name] + reg_term[name]
+            if accum_idx == 0:
+                ewc_weights = new_ewc_weights
+            elif accum_idx > 0:
+                ewc_weights = {}
+                for name, _ in cls_term.items():
+                    ewc_weights[name] = old_ewc_weights[name] * accum_idx + new_ewc_weights[name]
+                    ewc_weights[name] /= accum_idx+1
+            else:
+                raise RuntimeError
+            return ewc_weights
+
+        def _cycle_next(dataloader, dataloader_itr):
+            try:
+                data = dataloader_itr.__next__()
+                return data, dataloader_itr
+            except StopIteration:
+                newdataloader_itr = dataloader.__iter__()
+                data = newdataloader_itr.__next__()
+                return data, newdataloader_itr
+
+        ## compute FIM
+        model_sd = self._model.state_dict()
+        ewc_weights = _init_ewc_weights(model_sd)
+        dataloader_itr = dataloader.__iter__()
+        batch_size = dataloader.batch_size
+        self.eval()
+        for i in tqdm(range(num_of_datasamples // batch_size)):
+            data, dataloader_itr = _cycle_next(dataloader, dataloader_itr)
+            data = example_convert_to_torch(data,
+                dtype=torch.float32, device=torch.device("cuda:0"))
+            voxels = data["voxels"]
+            num_points = data["num_points"]
+            coors = data["coordinates"]
+            batch_anchors = data["anchors"]
+            preds_dict = self._network_forward(self._model, voxels, num_points, coors, batch_size)
+            num_of_classes = preds_dict["cls_preds"].shape[-1]
+            size_of_reg_encode = preds_dict["box_preds"].shape[-1]
+            cls_preds = preds_dict["cls_preds"].reshape(batch_size, -1, num_of_classes)
+            box_preds = preds_dict["box_preds"].reshape(batch_size, -1, size_of_reg_encode)
+            selected_cls, selected_box = _sampling_ewc(cls_preds, box_preds,
+                sample_strategy=anchor_sample_strategy,
+                num_of_samples=num_of_anchorsamples)
+            cls_term = _compute_FIM_cls_term(selected_cls, self._model)
+            reg_term = _compute_FIM_reg_term(selected_box, self._model, sigma_prior=reg_sigma_prior)
+            ewc_weights = _update_ewc_weights(ewc_weights, cls_term, reg_term, i)
+        return ewc_weights
 
     def train(self):
         super(Network, self).train(True)
