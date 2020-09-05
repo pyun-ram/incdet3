@@ -500,8 +500,15 @@ class Network(nn.Module):
         -> ewc_weights: {name: torch.FloatTensor.cuda}
         '''
         ewc_weights = read_pkl(path)
-        ewc_weights_ts = {name: torch.from_numpy(param).cuda()
-        for name, param in ewc_weights.items() }
+        ewc_weights_ts = {}
+        for name, param in ewc_weights.items():
+            if isinstance(param, np.ndarray):
+                ewc_weights_ts[name] = torch.from_numpy(param).cuda()
+            elif isinstance(param, np.float64):
+                ewc_weights_ts[name] = torch.FloatTensor([param]).cuda()
+            else:
+                print(f"Failed to load ewc weights: {name} {type(param)}")
+                raise RuntimeError
         print(f"loading ewc weights from {path}")
         return ewc_weights_ts
 
