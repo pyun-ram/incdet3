@@ -52,7 +52,7 @@ cfg.TRAINDATA = {
     "dataset": "kitti", # carla, nusc, kitti
     "training": True,
     "batch_size": 6,
-    "num_workers": 8,
+    "num_workers": 6,
     "feature_map_size": [1, 160, 132],
     "@root_path": "/usr/app/data/KITTI/training",
     "@info_path": "/usr/app/data/KITTI/KITTI_infos_train.pkl",
@@ -134,11 +134,7 @@ cfg.NETWORK = {
         "ckpt_path": "saved_weights/20200815-expkitti2+seq-saved_weights/train_class2-23200.tckpt",
         "num_classes": 2,
         "num_anchor_per_loc": 4,
-        "partially_load_params": [
-            "rpn.conv_cls.weight", "rpn.conv_cls.bias",
-            "rpn.conv_box.weight", "rpn.conv_box.bias",
-            "rpn.conv_dir_cls.weight", "rpn.conv_dir_cls.bias",
-        ],
+        "partially_load_params": [],
         "ignore_params": [],
     },
     "@sub_model_resume_dict": None,
@@ -228,8 +224,8 @@ cfg.NETWORK = {
 }
 
 cfg.EWC = {
-    "@num_of_datasamples": 6,
-    "@num_of_anchorsamples": 6*1,
+    "@num_of_datasamples": 200,
+    "@num_of_anchorsamples": 6*32,
     "@anchor_sample_strategy": "biased",
     "@reg_sigma_prior": 1,
     "@debug_mode": True

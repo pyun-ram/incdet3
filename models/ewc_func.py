@@ -4,6 +4,8 @@
  Copyright 2018-2020 Peng YUN, RAM-Lab, HKUST
 '''
 import torch
+from tqdm import tqdm
+
 def _init_ewc_weights(model_sd):
     '''
     init ewc_weights from model state_dict
@@ -81,7 +83,7 @@ def _compute_FIM_cls_term(cls_preds, model):
     cls_term = _init_ewc_weights(model.state_dict())
     num_anchors = cls_preds.shape[0]
     num_cls = cls_preds.shape[1]
-    for logit in cls_preds:
+    for logit in tqdm(cls_preds):
         prob = torch.softmax(logit, dim=-1)
         for cls in range(num_cls):
             model.zero_grad()
@@ -104,7 +106,7 @@ def _compute_FIM_reg_term(reg_preds, model, sigma_prior=0.1):
     '''
     reg_term = _init_ewc_weights(model.state_dict())
     num_anchors = reg_preds.shape[0]
-    for reg_output in reg_preds:
+    for reg_output in tqdm(reg_preds):
         for reg_output_ in reg_output:
             model.zero_grad()
             reg_output_.backward(retain_graph=True)
@@ -121,7 +123,7 @@ def _update_ewc_weights(old_ewc_weights, cls_term, reg_term, accum_idx):
     '''
     update ewc_weights by accumulating cls_term+reg_term into old_ewc_weights.
     @old_ewc_weights, cls_term, reg_term:
-        dict{name: param}
+        dict{name: torch.FloatTensor.cuda}
     @accum_idx: int
     -> dict {name: torch.FloatTensor.cuda}
     '''
@@ -138,6 +140,25 @@ def _update_ewc_weights(old_ewc_weights, cls_term, reg_term, accum_idx):
     else:
         raise RuntimeError
     return ewc_weights
+
+def _update_ewc_term(old_term, new_term, accum_idx):
+    '''
+    update ewc_term by accumulating new_term into old_term.
+    @old_term, new_term:
+        dict{name: torch.FloatTensor.cuda}
+    @accum_idx: int
+    -> dict {name: torch.FloatTensor.cuda}
+    '''
+    if accum_idx == 0:
+        term = new_term
+    elif accum_idx > 0:
+        term = {}
+        for name, _ in old_term.items():
+            term[name] = old_term[name] * accum_idx + new_term[name]
+            term[name] /= accum_idx+1
+    else:
+        raise RuntimeError
+    return term
 
 def _cycle_next(dataloader, dataloader_itr):
     try:

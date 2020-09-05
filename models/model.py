@@ -23,7 +23,8 @@ from incdet3.models.rpn import get_rpn_class
 from incdet3.utils.utils import bcolors
 from incdet3.builders.dataloader_builder import example_convert_to_torch
 from incdet3.models.ewc_func import (_init_ewc_weights, _sampling_ewc,
-    _compute_FIM_cls_term, _compute_FIM_reg_term, _update_ewc_weights, _cycle_next)
+    _compute_FIM_cls_term, _compute_FIM_reg_term, _update_ewc_weights,
+    _cycle_next, _update_ewc_term)
 
 class Network(nn.Module):
     HEAD_NEAMES = ["rpn.conv_cls", "rpn.conv_box", "rpn.conv_dir_cls"]
@@ -1119,16 +1120,26 @@ class Network(nn.Module):
         num_of_datasamples,
         num_of_anchorsamples,
         anchor_sample_strategy,
-        reg_sigma_prior=0.1):
+        reg_sigma_prior=0.1,
+        debug_mode=False):
         '''
         compute ewc weights after training
         @dataloader: torch.Dataloader (shuffled)
-        @num_of_samples: int
+        @num_of_datasamples: int
+        @num_of_anchorsamples: int
+        @anchor_sample_strategy: str "biased", "unbiased", "all"
+        @reg_sigma_prior: float
+        @debug_mode: if True, return the cls_term and reg_term.
+            Please setup the reg_sigma_prior=1 if debug_mode=True.
         -> ewc_weights {name: param (torch.FloatTensor.cuda)}
         '''
         ## compute FIM
         model_sd = self._model.state_dict()
         ewc_weights = _init_ewc_weights(model_sd)
+        if debug_mode:
+            assert reg_sigma_prior == 1, "Please set the reg_sigma_prior=1 in the debug mode."
+            final_cls_term = _init_ewc_weights(model_sd)
+            final_reg_term = _init_ewc_weights(model_sd)
         dataloader_itr = dataloader.__iter__()
         batch_size = dataloader.batch_size
         self.eval()
@@ -1151,7 +1162,13 @@ class Network(nn.Module):
             cls_term = _compute_FIM_cls_term(selected_cls, self._model)
             reg_term = _compute_FIM_reg_term(selected_box, self._model, sigma_prior=reg_sigma_prior)
             ewc_weights = _update_ewc_weights(ewc_weights, cls_term, reg_term, i)
-        return ewc_weights
+            if debug_mode:
+                final_cls_term = _update_ewc_term(final_cls_term, cls_term, i)
+                final_reg_term = _update_ewc_term(final_reg_term, cls_term, i)
+        if debug_mode:
+            return cls_term, reg_term, ewc_weights
+        else:
+            return ewc_weights
 
     def train(self):
         super(Network, self).train(True)

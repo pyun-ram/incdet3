@@ -19,7 +19,7 @@ cfg.TRAIN = {
     "num_save_iter": int(503/8 * 5),
     "optimizer_dict":{
         "type": "adam",
-        "init_lr": 1e-5,
+        "init_lr": 1e-3,
         "weight_decay": 0,
     },
     "lr_scheduler_dict":{
@@ -192,7 +192,7 @@ cfg.NETWORK = {
     "@neg_cls_weight": 1.0,
     "@l2sp_alpha_coef": 0.2,
     "@delta_coef": 0.01,
-    "@ewc_coef": 160*132*10,
+    "@ewc_coef": 160*132*0.01,
     "@ewc_weights_path": "saved_weights/202009001-dev-ewc/ewc_weights-23200.pkl",
     "@distillation_loss_cls_coef": 0.1,
     "@distillation_loss_reg_coef": 0.2,
@@ -227,7 +227,7 @@ cfg.NETWORK = {
         },
     },
     "@hook_layers": [],
-    "@distillation_mode": ["ewc"],
+    "@distillation_mode": ["ewc", "distillation_loss"],
     "@bool_reuse_anchor_for_cls": True,
     "@bool_biased_select_with_submodel": True,
     "@bool_delta_use_mask": False,
