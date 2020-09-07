@@ -20,6 +20,12 @@ Usage: python3 tools/detection_vis.py \
     --det-path logs/MLOD-LYFTCAR-PRE-A/test_detections.pkl \
     --lidar velo_top \
     --dataset carla
+        python3 tools/detection_vis.py \
+    --data-dir /usr/app/data/KITTI/training \
+    --info-path /usr/app/data/KITTI/KITTI_infos_val_cv3-tuning0.pkl \
+    --det-path logs/20200907-tune-ewcsigma-logs/20200905-tune-ewcsigma-kitti2+3-kdewc-cv0-0.1/29450/val_detections.pkl \
+    --lidar velo_top \
+    --dataset kitti
 '''
 import argparse
 import os
@@ -31,6 +37,7 @@ from det3.utils.utils import get_idx_list, load_pickle
 from det3.visualizer.vis import BEVImage
 from det3.dataloader.carladata import CarlaData, CarlaObj
 from det3.dataloader.waymodata import WaymoData, WaymoObj
+from det3.dataloader.kittidata import KittiData, KittiObj
 
 detections = None
 dataset = None
@@ -45,16 +52,27 @@ def vis_fn(i):
         pc_dict, label, calib = CarlaData(data_dir, idx).read_data()
     elif dataset == "waymo":
         pc_dict, label, calib = WaymoData(data_dir, idx).read_data()
+    elif dataset == "kitti":
+        output_dict = {
+            "calib": True,
+            "image": False,
+            "label": True,
+            "velodyne": True
+        }
+        calib, image, label, pc = KittiData(data_dir, idx, output_dict).read_data()
     else:
         raise NotImplementedError
-    if lidar == "merge":
-        pc = np.vstack([calib.lidar2imu(v, key="Tr_imu_to_{}".format(k))
-            for k, v in pc_dict.items()])
-    elif lidar in ["velo_top", "velo_left", "velo_right"]:
-        pc = calib.lidar2imu(pc_dict[lidar][:, :3], key=f"Tr_imu_to_{lidar}")
+    if dataset != "kitti":
+        if lidar == "merge":
+            pc = np.vstack([calib.lidar2imu(v, key="Tr_imu_to_{}".format(k))
+                for k, v in pc_dict.items()])
+        elif lidar in ["velo_top", "velo_left", "velo_right"]:
+            pc = calib.lidar2imu(pc_dict[lidar][:, :3], key=f"Tr_imu_to_{lidar}")
+        else:
+            raise NotImplementedError
+        bevimg = BEVImage(x_range=(-35.2, 35.2), y_range=(-40, 40), grid_size=(0.1, 0.1))
     else:
-        raise NotImplementedError
-    bevimg = BEVImage(x_range=(-35.2, 35.2), y_range=(-40, 40), grid_size=(0.1, 0.1))
+        bevimg = BEVImage(x_range=(0, 52.8), y_range=(-40, 40), grid_size=(0.1, 0.1))
     bevimg.from_lidar(pc)
     for obj in label.data:
         bevimg.draw_box(obj, calib, bool_gt=True)
@@ -64,13 +82,23 @@ def vis_fn(i):
         x, y, z, w, l, h, ry = box3d_lidar_
         if dataset == "carla":
             obj = CarlaObj()
+            obj.x, obj.y, obj.z = x, y, z
+            obj.w, obj.l, obj.h = w, l, h
+            obj.ry = ry
         elif dataset == "waymo":
             obj = WaymoObj()
+            obj.x, obj.y, obj.z = x, y, z
+            obj.w, obj.l, obj.h = w, l, h
+            obj.ry = ry
+        elif dataset == "kitti":
+            obj = KittiObj()
+            bcenter_Flidar = np.array([x, y, z]).reshape(1,-1)
+            bcenter_Fcam = calib.lidar2leftcam(bcenter_Flidar)
+            obj.x, obj.y, obj.z = bcenter_Fcam.flatten()
+            obj.w, obj.l, obj.h = w, l, h
+            obj.ry = ry
         else:
             raise NotImplementedError
-        obj.x, obj.y, obj.z = x, y, z
-        obj.w, obj.l, obj.h = w, l, h
-        obj.ry = ry
         bevimg.draw_box(obj, calib, bool_gt=False, width=2)
     bevimg.save(path=Path(detections_path).parent/f"{idx}.png")
 

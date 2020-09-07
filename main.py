@@ -304,7 +304,9 @@ def vis_fn_kitti(data_dir,
     for box3d_lidar_, score_ in zip(box3d_lidar, score):
         x, y, z, w, l, h, ry = box3d_lidar_
         obj = KittiObj()
-        obj.x, obj.y, obj.z = x, y, z
+        bcenter_Flidar = np.ndarray([x, y, z]).reshape(1, -1)
+        bcenter_Fcam = calib.lidar2leftcam(bcenter_Flidar)
+        obj.x, obj.y, obj.z = bcenter_Fcam.flatten()
         obj.w, obj.l, obj.h = w, l, h
         obj.ry = ry
         bevimg.draw_box(obj, calib, bool_gt=False, width=2)
