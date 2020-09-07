@@ -19,12 +19,22 @@
 #     --cfg-path configs/exp-kitti-2+seq/A1to5new-eval.py \
 #     --mode test
 
+# CUDA_VISIBLE_DEVICES=$1 python3 main.py \
+#     --tag 20200825-expkitti2+seq-B3to5lwfunbiasednew-eval \
+#     --cfg-path configs/exp-kitti-2+seq/B3to5lwfunbiasednew-eval.py \
+#     --mode test
+
+# CUDA_VISIBLE_DEVICES=$1 python3 main.py \
+#     --tag 20200825-expkitti2+seq-B3to5lwfthresholdnew-eval \
+#     --cfg-path configs/exp-kitti-2+seq/B3to5lwfthresholdnew-eval.py \
+#     --mode test
+
 CUDA_VISIBLE_DEVICES=$1 python3 main.py \
-    --tag 20200825-expkitti2+seq-B3to5lwfunbiasednew-eval \
-    --cfg-path configs/exp-kitti-2+seq/B3to5lwfunbiasednew-eval.py \
+    --tag 20200907-expkitti2+seq-B3to5ewcnew-eval \
+    --cfg-path configs/exp-kitti-2+seq/B3to5ewcnew-eval.py \
     --mode test
 
 CUDA_VISIBLE_DEVICES=$1 python3 main.py \
-    --tag 20200825-expkitti2+seq-B3to5lwfthresholdnew-eval \
-    --cfg-path configs/exp-kitti-2+seq/B3to5lwfthresholdnew-eval.py \
+    --tag 20200907-expkitti2+seq-B3to5kdewcnew-eval \
+    --cfg-path configs/exp-kitti-2+seq/B3to5kdewcnew-eval.py \
     --mode test

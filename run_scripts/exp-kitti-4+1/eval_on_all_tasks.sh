@@ -25,11 +25,11 @@
 #     --mode test
 
 CUDA_VISIBLE_DEVICES=$1 python3 main.py \
-    --tag 20200825-expkitti4+1-B5lwfunbiasedall-eval \
-    --cfg-path configs/exp-kitti-4+1/B5lwfunbiasedall-eval.py \
+    --tag 20200907-expkitti4+1-B5ewcall-eval \
+    --cfg-path configs/exp-kitti-4+1/B5ewcall-eval.py \
     --mode test
 
 CUDA_VISIBLE_DEVICES=$1 python3 main.py \
-    --tag 20200825-expkitti4+1-B5lwfthresholdall-eval \
-    --cfg-path configs/exp-kitti-4+1/B5lwfthresholdall-eval.py \
+    --tag 20200907-expkitti4+1-B5kdewcall-eval \
+    --cfg-path configs/exp-kitti-4+1/B5kdewcall-eval.py \
     --mode test
