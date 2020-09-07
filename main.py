@@ -15,6 +15,7 @@ import os
 import argparse
 import time
 import torch
+import numpy as np
 from tqdm import tqdm
 from apex import amp
 from datetime import datetime
