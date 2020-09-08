@@ -1,5 +1,5 @@
 #!/bin/bash
-python3 main.py \
+CUDA_VISIBLE_DEVICES=$1 python3 main.py \
     --tag 20200907-ewcweights-kitti2+seq-kdewc3 \
     --cfg configs/exp-kitti-2+seq/kdewc3_ewc.py \
     --mode compute_ewc_weights
