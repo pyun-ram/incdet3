@@ -136,7 +136,7 @@ cfg.NETWORK = {
     "@classes_target": ["Car", "Pedestrian", "Cyclist", "Van"],
     "@classes_source": ["Car", "Pedestrian", "Cyclist"],
     "@model_resume_dict": {
-        "ckpt_path": TBDckpt_pathTBD,
+        "ckpt_path": "saved_weights/20200907-expkitti2+seq-weights/kdewc_class4-34342.tckpt",
         "num_classes": 4,
         "num_anchor_per_loc": 8,
         "partially_load_params": [],
@@ -185,7 +185,7 @@ cfg.NETWORK = {
     "@distillation_loss_cls_coef": 0.1,
     "@distillation_loss_reg_coef": 0.2,
     "@ewc_coef": 160*132*0.1,
-    "@ewc_weights_path": TBDewc_weights_pathTBD,
+    "@ewc_weights_path": None,
     "@num_biased_select": 32,
     "@threshold_delta_fgmask": 0.5,
     "@loss_dict": {
