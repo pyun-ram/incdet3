@@ -5,16 +5,16 @@
  This script is to impose ewc reg_sigma_prior
  to combine cls_term and reg_term and get the final ewc_weights.
  python tools/impose_ewc-regsigmaprior.py \
-    --cls-term-path saved_weights/20200905-ewcweights-tune-regsigmaprior/ewc_clsterm-23200.pkl\
-    --reg-term-path saved_weights/20200905-ewcweights-tune-regsigmaprior/ewc_regterm-23200.pkl\
-    --reg-sigma-prior 1\
+    --cls-term-path saved_weights/20200905-ewcweights-tune-regsigmaprior/ewc_clsterm-23200.pkl \
+    --reg-term-path saved_weights/20200905-ewcweights-tune-regsigmaprior/ewc_regterm-23200.pkl \
+    --reg-sigma-prior 1 \
     --output-path saved_weights/20200905-ewcweights-tune-regsigmaprior/ewc_weights-23200-post.pkl
 '''
 import argparse
 from det3.ops import read_pkl, write_pkl
 
 def main(cls_term, reg_term, reg_sigma_prior, output_path):
-    ewc_weights = {name: param + reg_term[name]/reg_sigma_prior
+    ewc_weights = {name: param + reg_term[name]/(reg_sigma_prior**2)
         for name, param in cls_term.items()}
     write_pkl(ewc_weights, output_path)
 

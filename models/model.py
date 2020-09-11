@@ -24,7 +24,9 @@ from incdet3.utils.utils import bcolors
 from incdet3.builders.dataloader_builder import example_convert_to_torch
 from incdet3.models.ewc_func import (_init_ewc_weights, _sampling_ewc,
     _compute_FIM_cls_term, _compute_FIM_reg_term, _update_ewc_weights,
-    _cycle_next, _update_ewc_term)
+    _cycle_next, _update_ewc_term, _compute_accum_grad_v1,
+    _compute_FIM_cls2term_v1, _compute_FIM_reg2term_v1,
+    _compute_FIM_clsregterm_v1, _update_ewc_weights_v1)
 
 class Network(nn.Module):
     HEAD_NEAMES = ["rpn.conv_cls", "rpn.conv_box", "rpn.conv_dir_cls"]
@@ -1141,12 +1143,11 @@ class Network(nn.Module):
         -> ewc_weights {name: param (torch.FloatTensor.cuda)}
         '''
         ## compute FIM
-        model_sd = self._model.state_dict()
-        ewc_weights = _init_ewc_weights(model_sd)
+        ewc_weights = _init_ewc_weights(self._model)
         if debug_mode:
             assert reg_sigma_prior == 1, "Please set the reg_sigma_prior=1 in the debug mode."
-            final_cls_term = _init_ewc_weights(model_sd)
-            final_reg_term = _init_ewc_weights(model_sd)
+            final_cls_term = _init_ewc_weights(self._model)
+            final_reg_term = _init_ewc_weights(self._model)
         dataloader_itr = dataloader.__iter__()
         batch_size = dataloader.batch_size
         self.eval()
@@ -1171,9 +1172,88 @@ class Network(nn.Module):
             ewc_weights = _update_ewc_weights(ewc_weights, cls_term, reg_term, i)
             if debug_mode:
                 final_cls_term = _update_ewc_term(final_cls_term, cls_term, i)
-                final_reg_term = _update_ewc_term(final_reg_term, cls_term, i)
+                final_reg_term = _update_ewc_term(final_reg_term, reg_term, i)
         if debug_mode:
-            return cls_term, reg_term, ewc_weights
+            return final_cls_term, final_reg_term, ewc_weights
+        else:
+            return ewc_weights
+
+    def compute_ewc_weights_v1(self,
+        dataloader,
+        num_of_datasamples,
+        reg2_coef=0.1,
+        clsreg_coef=0.1,
+        debug_mode=False):
+        '''
+        compute ewc weights after training
+        @dataloader: torch.Dataloader (shuffled)
+        @num_of_datasamples: int
+        @reg2_coef: float, the coefficient of regression gradient square term
+        @clsreg_coef: float, the coefficient of regression-classification gradient cross product term
+        @debug_mode: if True, return the cls2_term, reg2_term and clsreg_term.
+        -> ewc_weights {name: param (torch.FloatTensor.cuda)}
+        '''
+        ## compute FIM
+        ewc_weights = _init_ewc_weights(self._model)
+        final_cls2_term = _init_ewc_weights(self._model)
+        final_reg2_term = _init_ewc_weights(self._model)
+        final_clsreg_term = _init_ewc_weights(self._model)
+        dataloader_itr = dataloader.__iter__()
+        batch_size = dataloader.batch_size
+        # freeze the batch normalization running mean & var
+        self.eval()
+        for i in tqdm(range(num_of_datasamples // batch_size)):
+            # compute loss
+            data, dataloader_itr = _cycle_next(dataloader, dataloader_itr)
+            data = example_convert_to_torch(data,
+                dtype=torch.float32, device=torch.device("cuda:0"))
+            voxels = data["voxels"]
+            num_points = data["num_points"]
+            coors = data["coordinates"]
+            batch_anchors = data["anchors"]
+            preds_dict = self._network_forward(self._model, voxels, num_points, coors, batch_size)
+            box_preds = preds_dict["box_preds"]
+            cls_preds = preds_dict["cls_preds"]
+            labels = data['labels']
+            reg_targets = data['reg_targets']
+            importance = data['importance']
+            weights = Network._prepare_loss_weights(
+                labels,
+                pos_cls_weight=self._pos_cls_weight,
+                neg_cls_weight=self._neg_cls_weight,
+                loss_norm_type=self._loss_norm_type,
+                importance=importance,
+                use_direction_classifier=True,
+                dtype=box_preds.dtype)
+            cls_targets = labels * weights["cared"].type_as(labels)
+            cls_targets = cls_targets.unsqueeze(-1)
+            loss_cls = self._compute_classification_loss(
+                est=cls_preds,
+                gt=cls_targets,
+                weights=weights["cls_weights"]*importance)*self._cls_loss_weight
+            loss_reg = self._compute_location_loss(
+                est=box_preds,
+                gt=reg_targets,
+                weights=weights["reg_weights"]*importance)*self._loc_loss_weight
+            # compute gradient
+            accum_grad_dict = _compute_accum_grad_v1(loss_cls, loss_reg, self._model)
+            cls2_term = _compute_FIM_cls2term_v1(accum_grad_dict["cls_grad"])
+            reg2_term = _compute_FIM_reg2term_v1(accum_grad_dict["reg_grad"])
+            clsreg_term = _compute_FIM_clsregterm_v1(
+                accum_grad_dict["cls_grad"],
+                accum_grad_dict["reg_grad"])
+            ewc_weights = _update_ewc_weights_v1(ewc_weights,
+                cls2_term, reg2_term, clsreg_term,
+                reg2_coef, clsreg_coef, i)
+            final_cls2_term = _update_ewc_term(final_cls2_term, cls2_term, i)
+            final_reg2_term = _update_ewc_term(final_reg2_term, reg2_term, i)
+            final_clsreg_term = _update_ewc_term(final_clsreg_term, clsreg_term, i)
+        if debug_mode:
+            return {
+                "cls2_term": final_cls2_term,
+                "reg2_term": final_reg2_term,
+                "clsreg_term": final_clsreg_term,
+                "ewc_weights": ewc_weights}
         else:
             return ewc_weights
 

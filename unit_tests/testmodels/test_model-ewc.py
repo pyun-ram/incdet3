@@ -4,14 +4,110 @@
  Copyright 2018-2020 Peng YUN, RAM-Lab, HKUST
 '''
 import torch
-import torch
 import unittest
+import numpy as np
 from copy import deepcopy
 from incdet3.models.model import Network
 from torch.nn.parameter import Parameter
+torch.manual_seed(123)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 def build_dataloader():
-    raise NotImplementedError
+    from incdet3.builders.dataloader_builder import build
+    from incdet3.builders import voxelizer_builder, target_assigner_builder
+    VOXELIZER_cfg = {
+        "type": "VoxelizerV1",
+        "@voxel_size": [0.05, 0.05, 0.1],
+        "@point_cloud_range": [0, -32, -3, 52.8, 32.0, 1],
+        "@max_num_points": 5,
+        "@max_voxels": 20000
+    }
+    TARGETASSIGNER_cfg = {
+        "type": "TaskAssignerV1",
+        "@classes": ["Car", "Pedestrian", "Cyclist"],
+        "@feature_map_sizes": None,
+        "@positive_fraction": None,
+        "@sample_size": 512,
+        "@assign_per_class": True,
+        "box_coder": {
+            "type": "BoxCoderV1",
+            "@custom_ndim": 0
+        },
+        "class_settings_car": {
+            "AnchorGenerator": {
+                "type": "AnchorGeneratorBEV",
+                "@class_name": "Car",
+                "@anchor_ranges": [0, -32, 0, 52.8, 32.0, 0], # TBD in modify_cfg(cfg)
+                "@sizes": [1.6, 3.9, 1.56], # wlh
+                "@rotations": [0, 1.57],
+                "@match_threshold": 0.6,
+                "@unmatch_threshold": 0.45,
+            },
+            "SimilarityCalculator": {
+                "type": "NearestIoUSimilarity"
+            }
+        },
+        "class_settings_pedestrian": {
+            "AnchorGenerator": {
+                "type": "AnchorGeneratorBEV",
+                "@class_name": "Pedestrian",
+                "@anchor_ranges": [0, -32, 0, 52.8, 32.0, 0], # TBD in modify_cfg(cfg)
+                "@sizes": [0.6, 0.8, 1.73], # wlh
+                "@rotations": [0, 1.57],
+                "@match_threshold": 0.6,
+                "@unmatch_threshold": 0.45,
+            },
+            "SimilarityCalculator": {
+                "type": "NearestIoUSimilarity"
+            }
+        },
+        "class_settings_cyclist": {
+            "AnchorGenerator": {
+                "type": "AnchorGeneratorBEV",
+                "@class_name": "Cyclist",
+                "@anchor_ranges": [0, -32, 0, 52.8, 32.0, 0], # TBD in modify_cfg(cfg)
+                "@sizes": [0.6, 0.8, 1.73], # wlh
+                "@rotations": [0, 1.57],
+                "@match_threshold": 0.6,
+                "@unmatch_threshold": 0.45,
+            },
+            "SimilarityCalculator": {
+                "type": "NearestIoUSimilarity"
+            }
+        },
+    }
+    TRAINDATA_cfg = {
+        "dataset": "kitti", # carla
+        "training": False, # set this to false to avoid shuffle
+        "batch_size": 1,
+        "num_workers": 1,
+        "@root_path": "unit_tests/data/test_kittidata",
+        "@info_path": "unit_tests/data/test_kittidata/KITTI_infos_train.pkl",
+        "@class_names": ["Car", "Pedestrian", "Cyclist"],
+        "prep": {
+            "@training": True, # set this to True to return targets
+            "@augment_dict": None,
+            "@filter_label_dict":
+            {
+                "keep_classes": ["Car", "Pedestrian", "Cyclist"],
+                "min_num_pts": -1,
+                "label_range": [0, -32, -3, 52.8, 32.0, 1],
+                # [min_x, min_y, min_z, max_x, max_y, max_z] FIMU
+            },
+            "@feature_map_size": [1, 200, 176] # TBD
+        }
+    }
+    data_cfg = TRAINDATA_cfg
+    voxelizer = voxelizer_builder.build(VOXELIZER_cfg)
+    target_assigner = target_assigner_builder.build(TARGETASSIGNER_cfg)
+    dataloader = build(data_cfg,
+        ext_dict={
+            "voxelizer": voxelizer,
+            "target_assigner": target_assigner,
+            "feature_map_size": [1, 200, 176]
+        })
+    return dataloader
 
 def build_network():
     network_cfg_template =  {
@@ -55,7 +151,7 @@ def build_network():
         "classes_target": ["class1", "class2", "class3"],
         "classes_source": ["class1", "class2"],
         "model_resume_dict": {
-            "ckpt_path": "/usr/app/incdet3/saved_weights/20200815-expkitti2+seq-saved_weights/train_class2-23200.tckpt",
+            "ckpt_path": "unit_tests/data/train_class2-23200.tckpt",
             "num_classes": 2,
             "num_anchor_per_loc": 4,
             "partially_load_params": [
@@ -65,7 +161,7 @@ def build_network():
             ]
         },
         "sub_model_resume_dict": {
-            "ckpt_path": "/usr/app/incdet3/saved_weights/20200815-expkitti2+seq-saved_weights/train_class2-23200.tckpt",
+            "ckpt_path": "unit_tests/data/train_class2-23200.tckpt",
             "num_classes": 2,
             "num_anchor_per_loc": 4,
             "partially_load_params": []
@@ -126,7 +222,7 @@ class Test_compute_ewc_weights(unittest.TestCase):
         network = build_network()
         from incdet3.models.ewc_func import _init_ewc_weights
         init_ewc_weights = _init_ewc_weights
-        ewc_weights = init_ewc_weights(network._model.state_dict())
+        ewc_weights = init_ewc_weights(network._model)
         for k, v in ewc_weights.items():
             self.assertTrue(float(v.sum()) == 0)
             self.assertTrue(v.shape == network._model.state_dict()[k].shape)
@@ -303,7 +399,7 @@ class Test_compute_ewc_weights(unittest.TestCase):
         sigma_prior = 1
         batch_x = torch.randn([3, 5, 2])
         model = TestModel()
-        ewc_weights = _init_ewc_weights(model.state_dict())
+        ewc_weights = _init_ewc_weights(model)
         cls_term_list, reg_term_list = [], []
         for i, x in enumerate(batch_x):
             reg_preds = model(x)
@@ -312,7 +408,7 @@ class Test_compute_ewc_weights(unittest.TestCase):
             ewc_weights = _update_ewc_weights(ewc_weights, cls_term, reg_term, i)
             cls_term_list.append(cls_term)
             reg_term_list.append(reg_term)
-        gt_ewc_weights = _init_ewc_weights(model.state_dict())
+        gt_ewc_weights = _init_ewc_weights(model)
         for cls_term, reg_term in zip(cls_term_list, reg_term_list):
             for name, _ in gt_ewc_weights.items():
                 gt_ewc_weights[name] += cls_term[name] + reg_term[name]
@@ -320,6 +416,7 @@ class Test_compute_ewc_weights(unittest.TestCase):
             gt_ewc_weights[name] = param / batch_x.shape[0]
         for name, param in gt_ewc_weights.items():
             self.assertTrue(torch.allclose(param, ewc_weights[name]))
+
 
     def test_compute_ewc_loss(self):
         from torch.optim import Adam
@@ -335,6 +432,92 @@ class Test_compute_ewc_weights(unittest.TestCase):
         loss_ewc = network._compute_ewc_loss()
         loss_l2sp = network._compute_l2sp_loss()
         self.assertTrue(torch.allclose(loss_ewc, loss_l2sp))
+
+    def test_compute_ewc_weights(self):
+        state = np.random.get_state()
+        torch_state_cpu = torch.Generator().get_state()
+        torch_state_gpu = torch.Generator(device="cuda:0").get_state()
+        network = build_network().cuda()
+        dataloader = build_dataloader()
+        num_of_datasamples = len(dataloader)
+        num_of_anchorsamples = 2
+        anchor_sample_strategy = "biased"
+        debug_mode = False
+        from det3.ops import read_pkl, write_pkl
+        from incdet3.models.ewc_func import (_compute_FIM_reg_term,
+            _compute_FIM_cls_term, _update_ewc_weights,
+            _init_ewc_weights, _sampling_ewc)
+        from incdet3.builders.dataloader_builder import example_convert_to_torch
+        for reg_sigma_prior in [1, 0.1]:
+            est_ewc_weights = network.compute_ewc_weights(dataloader,
+                num_of_datasamples,
+                num_of_anchorsamples,
+                anchor_sample_strategy,
+                reg_sigma_prior,
+                debug_mode)
+            gt_ewc_weights = read_pkl(f"unit_tests/results/test_model-ewc_compute_ewc_weights-{reg_sigma_prior}.pkl")
+            for name, _ in est_ewc_weights.items():
+                self.assertTrue(torch.allclose(est_ewc_weights[name], gt_ewc_weights[name], atol=1e-08, rtol=1e-05))
+        np.random.set_state(state)
+        torch.Generator().set_state(torch_state_cpu)
+        torch.Generator(device="cuda:0").set_state(torch_state_gpu)
+
+    def test_compute_ewc_weights_debug(self):
+        state = np.random.get_state()
+        torch_state_cpu = torch.Generator().get_state()
+        torch_state_gpu = torch.Generator(device="cuda:0").get_state()
+        network = build_network().cuda()
+        dataloader = build_dataloader()
+        num_of_datasamples = len(dataloader)
+        num_of_anchorsamples = 2
+        anchor_sample_strategy = "biased"
+        debug_mode = True
+        reg_sigma_prior = 1
+        from det3.ops import read_pkl, write_pkl
+        import subprocess
+        import os
+        cls_term, reg_term, est_ewc_weights = network.compute_ewc_weights(dataloader,
+            num_of_datasamples,
+            num_of_anchorsamples,
+            anchor_sample_strategy,
+            reg_sigma_prior,
+            debug_mode)
+        gt_ewc_weights1 = network.compute_ewc_weights(dataloader,
+            num_of_datasamples,
+            num_of_anchorsamples,
+            anchor_sample_strategy,
+            reg_sigma_prior=1,
+            debug_mode=False)
+        gt_ewc_weights01 = network.compute_ewc_weights(dataloader,
+            num_of_datasamples,
+            num_of_anchorsamples,
+            anchor_sample_strategy,
+            reg_sigma_prior=0.1,
+            debug_mode=False)
+        for name, _ in est_ewc_weights.items():
+            self.assertTrue(torch.allclose(est_ewc_weights[name], gt_ewc_weights1[name], atol=1e-08, rtol=1e-05))
+        flag = False
+        for name, _ in est_ewc_weights.items():
+            if not torch.allclose(est_ewc_weights[name], gt_ewc_weights01[name], atol=1e-08, rtol=1e-05):
+                flag = True
+        self.assertTrue(flag)
+        write_pkl({k: v.cpu().numpy() for k, v in cls_term.items()}, f"ewc_clsterm-tmp.pkl")
+        write_pkl({k: v.cpu().numpy() for k, v in reg_term.items()}, f"ewc_regterm-tmp.pkl")
+        cmd = "python tools/impose_ewc-regsigmaprior.py "
+        cmd += "--cls-term-path ewc_clsterm-tmp.pkl "
+        cmd += "--reg-term-path ewc_regterm-tmp.pkl "
+        cmd += "--reg-sigma-prior 0.1 "
+        cmd += "--output-path ewc_weights-tmp-0.1.pkl"
+        subprocess.check_output(cmd, shell=True)
+        est_ewc_weights01 = read_pkl("ewc_weights-tmp-0.1.pkl")
+        for name, _ in est_ewc_weights01.items():
+            self.assertTrue(np.allclose(est_ewc_weights01[name], gt_ewc_weights01[name].cpu().numpy(), atol=1e-08, rtol=1e-05))
+        os.remove("ewc_clsterm-tmp.pkl")
+        os.remove("ewc_regterm-tmp.pkl")
+        os.remove("ewc_weights-tmp-0.1.pkl")
+        np.random.set_state(state)
+        torch.Generator().set_state(torch_state_cpu)
+        torch.Generator(device="cuda:0").set_state(torch_state_gpu)
 
 if __name__ == "__main__":
     unittest.main()

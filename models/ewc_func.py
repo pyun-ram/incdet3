@@ -6,14 +6,14 @@
 import torch
 from tqdm import tqdm
 
-def _init_ewc_weights(model_sd):
+def _init_ewc_weights(model):
     '''
-    init ewc_weights from model state_dict
-    @model_sd: nn.Module.state_dict()
+    init ewc_weights from model
+    @model: nn.Module
     -> ewc_weights: dict {name: torch.FloatTensor.cuda (zeros)}
     '''
     ewc_weights = {}
-    for name, param in model_sd.items():
+    for name, param in model.named_parameters():
         ewc_weights[name] = torch.zeros_like(param)
     return ewc_weights
 
@@ -80,7 +80,7 @@ def _compute_FIM_cls_term(cls_preds, model):
     @model: nn.Module
     -> cls_term:dict {name: torch.FloatTensor.cuda}
     '''
-    cls_term = _init_ewc_weights(model.state_dict())
+    cls_term = _init_ewc_weights(model)
     num_anchors = cls_preds.shape[0]
     num_cls = cls_preds.shape[1]
     for logit in tqdm(cls_preds):
@@ -104,7 +104,7 @@ def _compute_FIM_reg_term(reg_preds, model, sigma_prior=0.1):
     @model: nn.Module
     -> reg_term:dict {name: torch.FloatTensor.cuda}
     '''
-    reg_term = _init_ewc_weights(model.state_dict())
+    reg_term = _init_ewc_weights(model)
     num_anchors = reg_preds.shape[0]
     for reg_output in tqdm(reg_preds):
         for reg_output_ in reg_output:
@@ -168,3 +168,102 @@ def _cycle_next(dataloader, dataloader_itr):
         newdataloader_itr = dataloader.__iter__()
         data = newdataloader_itr.__next__()
         return data, newdataloader_itr
+
+def _compute_accum_grad_v1(loss_cls, loss_reg, model):
+    '''
+    compute the accum_grad_cls and accum_grad_reg
+    @loss_cls: [batch_size, num_of_anchors,1]
+    @loss_reg: [batch_size, num_of_anchors,1]
+    @model: nn.Module
+    -> accum_grad {
+        'cls_grad': accum_grad_cls, (sum of the batch gradients)
+        'reg_grad': accum_grad_reg, (sum of the batch gradients)
+    }
+    '''
+    # cls_grad
+    model.zero_grad()
+    loss_cls.sum().backward(retain_graph=True)
+    accum_grad_cls = {}
+    for name, param in model.named_parameters():
+        accum_grad_cls[name] = (param.grad.detach()
+            if param.grad is not None else
+            torch.zeros(1, device=torch.device("cuda:0"),
+            requires_grad=False))
+    # reg_grad
+    model.zero_grad()
+    loss_reg.sum().backward(retain_graph=True)
+    accum_grad_reg = {}
+    for name, param in model.named_parameters():
+        accum_grad_reg[name] = (param.grad.detach()
+            if param.grad is not None else
+            torch.zeros(1, device=torch.device("cuda:0"),
+            requires_grad=False))
+    model.zero_grad()
+    return {
+        'cls_grad': accum_grad_cls,
+        'reg_grad': accum_grad_reg,
+    }
+
+def _compute_FIM_cls2term_v1(accum_grad_cls):
+    '''
+    compute the classification gradient square term.
+    @accum_grad_cls: {name: param}
+    -> cls2_term: {name: param}
+    '''
+    cls2_term = {}
+    for name, param in accum_grad_cls.items():
+        cls2_term[name] = param **2
+    return cls2_term
+
+def _compute_FIM_reg2term_v1(accum_grad_reg):
+    '''
+    compute the regression gradient square term.
+    @accum_grad_reg: {name: param}
+    -> reg2_term: {name: param}
+    '''
+    reg2_term = {}
+    for name, param in accum_grad_reg.items():
+        reg2_term[name] = param **2
+    return reg2_term
+
+def _compute_FIM_clsregterm_v1(accum_grad_cls, accum_grad_reg):
+    '''
+    compute the classification gradient and regression gradient production term.
+    @accum_grad_reg: {name: param}
+    -> clsreg_term: {name: param}
+    '''
+    clsreg_term = {}
+    for name, _ in accum_grad_reg.items():
+        # element-wise production
+        clsreg_term[name] = torch.mul(accum_grad_cls[name], accum_grad_reg[name])
+    return clsreg_term
+
+def _update_ewc_weights_v1(old_ewc_weights,
+    cls2_term, reg2_term, clsreg_term,
+    reg2_coef, clsreg_coef, accum_idx):
+    '''
+    update old_ewc_weights by accumulating
+        cls2_term + reg2_coef x reg2_term + clsreg_coef x clsreg_term
+        into old_ewc_weights.
+    @cls2_term, reg2_term, clsreg_term:
+        dict{name: torch.FloatTensor.cuda}
+    @reg2_coef, clsreg_coef:
+        float
+    @accum_idx: int
+    -> dict {name: torch.FloatTensor.cuda}
+    '''
+    new_ewc_weights = {}
+    for name, param in old_ewc_weights.items():
+        new_ewc_weights[name] = (cls2_term[name]
+            + reg2_coef * reg2_term[name]
+            + clsreg_coef * clsreg_term[name])
+    if accum_idx == 0:
+        term = new_ewc_weights
+    elif accum_idx > 0:
+        term = {}
+        for name, _ in old_ewc_weights.items():
+            term[name] = old_ewc_weights[name] * accum_idx + new_ewc_weights[name]
+            term[name] /= accum_idx+1
+    else:
+        raise RuntimeError
+    return term
