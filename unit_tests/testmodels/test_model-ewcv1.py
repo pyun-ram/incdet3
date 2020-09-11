@@ -313,7 +313,7 @@ class Test_compute_ewc_weights_v1(unittest.TestCase):
         num_of_datasamples = len(dataloader)
         debug_mode = True
         reg2_coef=0.1
-        clsreg_coef=0.1
+        clsreg_coef=0.01
         est_ewc_weights_dict = network.compute_ewc_weights_v1(dataloader,
             num_of_datasamples,
             reg2_coef=reg2_coef,
@@ -330,6 +330,30 @@ class Test_compute_ewc_weights_v1(unittest.TestCase):
             self.assertTrue(torch.all(param == est_ewc_weights_dict["cls2_term"][name]
                 + est_ewc_weights_dict["reg2_term"][name] * reg2_coef
                 + est_ewc_weights_dict["clsreg_term"][name] * clsreg_coef))
+        from det3.ops import write_pkl, read_pkl
+        import subprocess
+        import os
+        write_pkl({k: v.cpu().numpy() for k, v in est_ewc_weights_dict["cls2_term"].items()}, f"ewc_cls2term-tmp.pkl")
+        write_pkl({k: v.cpu().numpy() for k, v in est_ewc_weights_dict["reg2_term"].items()}, f"ewc_reg2term-tmp.pkl")
+        write_pkl({k: v.cpu().numpy() for k, v in est_ewc_weights_dict["clsreg_term"].items()}, f"ewc_clsregterm-tmp.pkl")
+        cmd = "python tools/impose_ewc-reg2coef-clsregcoef.py "
+        cmd += "--cls2term-path ewc_cls2term-tmp.pkl "
+        cmd += "--reg2term-path ewc_reg2term-tmp.pkl "
+        cmd += "--clsregterm-path ewc_clsregterm-tmp.pkl "
+        cmd += f"--reg2coef {reg2_coef} "
+        cmd += f"--clsregcoef {clsreg_coef} "
+        cmd += "--output-path ewc_weights-tmp.pkl"
+        subprocess.check_output(cmd, shell=True)
+        est_ewc_weights = read_pkl("ewc_weights-tmp.pkl")
+        for name, _ in est_ewc_weights.items():
+            self.assertTrue(np.allclose(est_ewc_weights[name], gt_ewc_weights[name].cpu().numpy(), atol=1e-08, rtol=1e-05))
+        os.remove("ewc_cls2term-tmp.pkl")
+        os.remove("ewc_reg2term-tmp.pkl")
+        os.remove("ewc_clsregterm-tmp.pkl")
+        os.remove("ewc_weights-tmp.pkl")
+        np.random.set_state(state)
+        torch.Generator().set_state(torch_state_cpu)
+        torch.Generator(device="cuda:0").set_state(torch_state_gpu)
 
     def test_compute_accum_grad_v1(self):
         from incdet3.models.ewc_func import _compute_accum_grad_v1
