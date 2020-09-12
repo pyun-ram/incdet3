@@ -7,14 +7,16 @@ cfg = edict()
 cfg.TASK = {
     "valid_range": [0, -32.0, -3, 52.8, 32.0, 1],
     "total_training_steps": 464 * 50,
+    "continue_training_steps": int(500/8 * 100),
     "use_fp16": False,
 }
 
 cfg.TRAIN = {
-    "train_iter": cfg.TASK["total_training_steps"],
+    "train_iter": (cfg.TASK["total_training_steps"]
+        + cfg.TASK["continue_training_steps"]),
     "num_log_iter": 40,
-    "num_val_iter": 901,
-    "num_save_iter": 901,
+    "num_val_iter": int(500/8 * 5),
+    "num_save_iter": int(500/8 * 5),
     "optimizer_dict":{
         "type": "adam",
         "init_lr": 1e-3,
@@ -22,7 +24,8 @@ cfg.TRAIN = {
     },
     "lr_scheduler_dict":{
         "type": "StepLR",
-        "step_size": cfg.TASK["total_training_steps"] * 0.8,
+        "step_size": (cfg.TASK["total_training_steps"]
+            + cfg.TASK["continue_training_steps"] * 0.8),
         "gamma": 0.1
     }
 }
@@ -37,7 +40,8 @@ cfg.VOXELIZER = {
 
 cfg.TARGETASSIGNER = {
     "type": "TaskAssignerV1",
-    "@classes": ["Car", "Pedestrian"],
+    "@classes": ["Car", "Pedestrian", "Cyclist", "Van",
+                 "Truck"],
     "@feature_map_sizes": None,
     "@positive_fraction": None,
     "@sample_size": 512,
@@ -48,29 +52,29 @@ cfg.TARGETASSIGNER = {
     },
 }
 
+# use the training data for the task
 cfg.TRAINDATA = {
     "dataset": "kitti", # carla, nusc, kitti
     "training": True,
-    "batch_size": 4,
-    "num_workers": 4,
+    "batch_size": 8,
+    "num_workers": 8,
     "feature_map_size": [1, 160, 132],
     "@root_path": "/usr/app/data/KITTI/training",
-    "@info_path": "/usr/app/data/KITTI/KITTI_infos_train.pkl",
+    "@info_path": "/usr/app/data/KITTI/KITTI_infos_train_cv3-tuning2.pkl",
     "@class_names": cfg.TARGETASSIGNER["@classes"].copy(),
     "prep": {
         "@training": True,
-        "@augment_dict": None,
-        # "@augment_dict":
-        # {
-        #     "p_rot": 0.3,
-        #     "dry_range": [deg2rad(-22.5), deg2rad(22.5)],
-        #     "p_tr": 0.3,
-        #     "dx_range": [-1, 1],
-        #     "dy_range": [-1, 1],
-        #     "dz_range": [-0.1, 0.1],
-        #     "p_flip": 0.3,
-        #     "p_keep": 0.1
-        # },
+        "@augment_dict":
+        {
+            "p_rot": 0.3,
+            "dry_range": [deg2rad(-22.5), deg2rad(22.5)],
+            "p_tr": 0.3,
+            "dx_range": [-1, 1],
+            "dy_range": [-1, 1],
+            "dz_range": [-0.1, 0.1],
+            "p_flip": 0.3,
+            "p_keep": 0.1
+        },
         "@filter_label_dict":
         {
             "keep_classes": cfg.TARGETASSIGNER["@classes"].copy(),
@@ -81,15 +85,15 @@ cfg.TRAINDATA = {
             # [min_x, min_y, min_z, max_x, max_y, max_z] FIMU
         },
         "@feature_map_size": None, # TBD in dataloader_builder.py
-        "@classes_to_exclude": []
+        "@classes_to_exclude": ["Car", "Pedestrian"]
     },
     "prep_infos": {
         "@valid_range": cfg.TASK["valid_range"],
-        "@target_classes": ["Car", "Pedestrian"]
+        "@target_classes": ["Cyclist", "Van", "Truck"]
     }
 }
 
-
+# use the validation data for the task
 cfg.VALDATA = {
     "dataset": "kitti", # carla
     "training": False,
@@ -97,7 +101,7 @@ cfg.VALDATA = {
     "num_workers": 5,
     "feature_map_size": [1, 160, 132],
     "@root_path": "/usr/app/data/KITTI/training",
-    "@info_path": "/usr/app/data/KITTI/KITTI_infos_val.pkl",
+    "@info_path": "/usr/app/data/KITTI/KITTI_infos_val_cv3-tuning2.pkl",
     "@class_names": cfg.TARGETASSIGNER["@classes"].copy(),
     "prep": {
         "@training": False,
@@ -107,10 +111,11 @@ cfg.VALDATA = {
     },
     "prep_infos": {
         "@valid_range": cfg.TASK["valid_range"],
-        "@target_classes": ["Car", "Pedestrian"]
+        "@target_classes": ["Cyclist", "Van", "Truck"]
     }
 }
 
+# use all the test data
 cfg.TESTDATA = {
     "dataset": "kitti", # carla
     "training": False,
@@ -125,20 +130,31 @@ cfg.TESTDATA = {
         "@augment_dict": None,
         "@filter_label_dict": dict(),
         "@feature_map_size": None # TBD in dataloader_builder.py
-    },
+    }
 }
 
 cfg.NETWORK = {
-    "@classes_target": ["Car", "Pedestrian"],
-    "@classes_source": None,
+    "@classes_target": ["Car", "Pedestrian", "Cyclist", "Van",
+        "Truck"],
+    "@classes_source": ["Car", "Pedestrian"],
     "@model_resume_dict": {
+        "ckpt_path": "saved_weights/20200813-expkitti2+3-saved_weights/train_class2-23200.tckpt",
+        "num_classes": 2,
+        "num_anchor_per_loc": 4,
+        "partially_load_params": [
+            "rpn.conv_cls.weight", "rpn.conv_cls.bias",
+            "rpn.conv_box.weight", "rpn.conv_box.bias",
+            "rpn.conv_dir_cls.weight", "rpn.conv_dir_cls.bias",
+        ],
+        "ignore_params": [],
+    },
+    "@sub_model_resume_dict": {
         "ckpt_path": "saved_weights/20200813-expkitti2+3-saved_weights/train_class2-23200.tckpt",
         "num_classes": 2,
         "num_anchor_per_loc": 4,
         "partially_load_params": [],
         "ignore_params": [],
     },
-    "@sub_model_resume_dict": None,
     "@voxel_encoder_dict": {
         "name": "SimpleVoxel",
         "@num_input_features": 4,
@@ -168,18 +184,20 @@ cfg.NETWORK = {
         "@box_code_size": 7, # TBD
         "@num_direction_bins": 2,
     },
-    "@training_mode": "train_from_scratch",
+    "@training_mode": "lwf",
     "@is_training": None, #TBD
     "@cls_loss_weight": 1.0,
     "@loc_loss_weight": 2.0,
     "@dir_loss_weight": 0.2,
-    "@weight_decay_coef": 0.01,
+    "@weight_decay_coef": 0.001,
     "@pos_cls_weight": 1.0,
     "@neg_cls_weight": 1.0,
     "@l2sp_alpha_coef": 0.2,
     "@delta_coef": 0.01,
     "@distillation_loss_cls_coef": 0.1,
     "@distillation_loss_reg_coef": 0.2,
+    "@ewc_coef": 160*132,
+    "@ewc_weights_path": "saved_weights/20200912-ewcweights-compute_terms/ewc_weights-23200-reg2coef1-clsregcoef0.1.pkl",
     "@num_biased_select": 32,
     "@threshold_delta_fgmask": 0.5,
     "@loss_dict": {
@@ -211,7 +229,7 @@ cfg.NETWORK = {
         },
     },
     "@hook_layers": [],
-    "@distillation_mode": [],
+    "@distillation_mode": ["ewc", "distillation_loss"],
     "@bool_reuse_anchor_for_cls": True,
     "@bool_biased_select_with_submodel": True,
     "@bool_delta_use_mask": False,
@@ -222,13 +240,6 @@ cfg.NETWORK = {
     "@nms_post_max_sizes": [100],
     "@nms_iou_thresholds": [0.01],
     "@box_coder": None #TBD in main.py
-}
-
-cfg.EWC = {
-    # "@num_of_datasamples": 200,
-    "@reg2_coef": 1,
-    "@clsreg_coef": 1,
-    "@debug_mode": True
 }
 
 def modify_cfg(cfg_):

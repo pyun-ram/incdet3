@@ -185,7 +185,7 @@ def _compute_accum_grad_v1(loss_cls, loss_reg, model):
     loss_cls.sum().backward(retain_graph=True)
     accum_grad_cls = {}
     for name, param in model.named_parameters():
-        accum_grad_cls[name] = (param.grad.detach()
+        accum_grad_cls[name] = (param.grad.clone()
             if param.grad is not None else
             torch.zeros(1, device=torch.device("cuda:0"),
             requires_grad=False))
@@ -194,7 +194,7 @@ def _compute_accum_grad_v1(loss_cls, loss_reg, model):
     loss_reg.sum().backward(retain_graph=True)
     accum_grad_reg = {}
     for name, param in model.named_parameters():
-        accum_grad_reg[name] = (param.grad.detach()
+        accum_grad_reg[name] = (param.grad.clone()
             if param.grad is not None else
             torch.zeros(1, device=torch.device("cuda:0"),
             requires_grad=False))

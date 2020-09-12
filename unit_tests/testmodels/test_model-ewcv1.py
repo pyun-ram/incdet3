@@ -297,7 +297,7 @@ class Test_compute_ewc_weights_v1(unittest.TestCase):
                 cls2_term, reg2_term, clsreg_term,
                 reg2_coef, clsreg_coef, i)
         for name, param in gt_ewc_weights.items():
-            self.assertTrue(torch.all(param == est_ewc_weights[name]))
+            self.assertTrue(torch.allclose(param, est_ewc_weights[name]))
         np.random.set_state(state)
         torch.Generator().set_state(torch_state_cpu)
         torch.Generator(device="cuda:0").set_state(torch_state_gpu)
@@ -325,9 +325,9 @@ class Test_compute_ewc_weights_v1(unittest.TestCase):
             clsreg_coef=clsreg_coef,
             debug_mode=False)
         for name, param in gt_ewc_weights.items():
-            self.assertTrue(torch.all(param == est_ewc_weights_dict["ewc_weights"][name]))
+            self.assertTrue(torch.allclose(param, est_ewc_weights_dict["ewc_weights"][name]))
         for name, param in gt_ewc_weights.items():
-            self.assertTrue(torch.all(param == est_ewc_weights_dict["cls2_term"][name]
+            self.assertTrue(torch.allclose(param, est_ewc_weights_dict["cls2_term"][name]
                 + est_ewc_weights_dict["reg2_term"][name] * reg2_coef
                 + est_ewc_weights_dict["clsreg_term"][name] * clsreg_coef))
         from det3.ops import write_pkl, read_pkl
@@ -372,12 +372,12 @@ class Test_compute_ewc_weights_v1(unittest.TestCase):
         gt_grad_cls = {}
         loss_cls.sum().backward(retain_graph=True)
         for name, param in model.named_parameters():
-            gt_grad_cls[name] = param.grad.detach()
+            gt_grad_cls[name] = param.grad.clone()
         model.zero_grad()
         gt_grad_reg = {}
         loss_reg.sum().backward(retain_graph=True)
         for name, param in model.named_parameters():
-            gt_grad_reg[name] = param.grad.detach()
+            gt_grad_reg[name] = param.grad.clone()
         # compare gt and est:
         for name, param in gt_grad_cls.items():
             self.assertTrue(torch.all(param == accum_grad_dict["cls_grad"][name]))

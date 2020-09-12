@@ -476,7 +476,7 @@ def compute_ewc_weights(cfg):
         write_pkl({k: v.cpu().numpy() for k, v in ewc_weights_dict["reg2_term"].items()},
             os.path.join(g_save_dir, f"ewc_reg2term-{model.get_global_step()}.pkl"))
         write_pkl({k: v.cpu().numpy() for k, v in ewc_weights_dict["clsreg_term"].items()},
-            os.path.join(g_save_dir, f"ewc_clsreg_term-{model.get_global_step()}.pkl"))
+            os.path.join(g_save_dir, f"ewc_clsregterm-{model.get_global_step()}.pkl"))
         write_pkl({k: v.cpu().numpy() for k, v in ewc_weights_dict["ewc_weights"].items()},
             os.path.join(g_save_dir, f"ewc_weights-{model.get_global_step()}.pkl"))
 
