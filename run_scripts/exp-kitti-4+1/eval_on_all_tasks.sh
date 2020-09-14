@@ -25,11 +25,11 @@
 #     --mode test
 
 CUDA_VISIBLE_DEVICES=$1 python3 main.py \
-    --tag 20200907-expkitti4+1-B5ewcall-eval \
+    --tag 20200913-expkitti4+1-B5ewcall-eval \
     --cfg-path configs/exp-kitti-4+1/B5ewcall-eval.py \
     --mode test
 
 CUDA_VISIBLE_DEVICES=$1 python3 main.py \
-    --tag 20200907-expkitti4+1-B5kdewcall-eval \
+    --tag 20200913-expkitti4+1-B5kdewcall-eval \
     --cfg-path configs/exp-kitti-4+1/B5kdewcall-eval.py \
     --mode test

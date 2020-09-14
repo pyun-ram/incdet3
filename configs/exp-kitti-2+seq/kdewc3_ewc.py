@@ -55,25 +55,26 @@ cfg.TARGETASSIGNER = {
 cfg.TRAINDATA = {
     "dataset": "kitti", # carla, nusc, kitti
     "training": True,
-    "batch_size": 6,
-    "num_workers": 6,
+    "batch_size": 4,
+    "num_workers": 4,
     "feature_map_size": [1, 160, 132],
     "@root_path": "/usr/app/data/KITTI/training",
     "@info_path": "/usr/app/data/KITTI/KITTI_infos_train.pkl",
     "@class_names": cfg.TARGETASSIGNER["@classes"].copy(),
     "prep": {
         "@training": True,
-        "@augment_dict":
-        {
-            "p_rot": 0.3,
-            "dry_range": [deg2rad(-22.5), deg2rad(22.5)],
-            "p_tr": 0.3,
-            "dx_range": [-1, 1],
-            "dy_range": [-1, 1],
-            "dz_range": [-0.1, 0.1],
-            "p_flip": 0.3,
-            "p_keep": 0.1
-        },
+        # "@augment_dict":
+        # {
+        #     "p_rot": 0.3,
+        #     "dry_range": [deg2rad(-22.5), deg2rad(22.5)],
+        #     "p_tr": 0.3,
+        #     "dx_range": [-1, 1],
+        #     "dy_range": [-1, 1],
+        #     "dz_range": [-0.1, 0.1],
+        #     "p_flip": 0.3,
+        #     "p_keep": 0.1
+        # },
+        "@augment_dict": None,
         "@filter_label_dict":
         {
             "keep_classes": cfg.TARGETASSIGNER["@classes"].copy(),
@@ -136,7 +137,7 @@ cfg.NETWORK = {
     "@classes_target": ["Car", "Pedestrian", "Cyclist"],
     "@classes_source": ["Car", "Pedestrian"],
     "@model_resume_dict": {
-        "ckpt_path": "saved_weights/20200907-expkitti2+seq-weights/kdewc_class3-26690.tckpt",
+        "ckpt_path": "saved_weights/20200913-expkitti2+seq-weights/kdewc_class3-TBDstepTBD.tckpt",
         "num_classes": 3,
         "num_anchor_per_loc": 6,
         "partially_load_params": [],
@@ -231,10 +232,9 @@ cfg.NETWORK = {
 }
 
 cfg.EWC = {
-    "@num_of_datasamples": 200,
-    "@num_of_anchorsamples": 6*32,
-    "@anchor_sample_strategy": "biased",
-    "@reg_sigma_prior": 1,
+    # "@num_of_datasamples": 200,
+    "@reg2_coef": 1,
+    "@clsreg_coef": 1,
     "@debug_mode": True
 }
 
