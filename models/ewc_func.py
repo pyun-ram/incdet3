@@ -267,3 +267,27 @@ def _update_ewc_weights_v1(old_ewc_weights,
     else:
         raise RuntimeError
     return term
+
+def compute_FIM_v2(loss_det, model):
+    '''
+    compute the FIM according to with FIM = d/d\theta loss_det^2
+    @loss_det: detection loss with summation reduction
+    @model: torch.nn.Module
+    -> FIM {name: param (torch.FloatTensor.cuda)}
+    '''
+    model.zero_grad()
+    loss_det.backward()
+    FIM = {}
+    for name, param in model.named_parameters():
+        FIM[name] = (param.grad.clone() ** 2
+            if param.grad is not None else
+            torch.zeros(1, device=torch.device("cuda:0"),
+            requires_grad=False))
+    model.zero_grad()
+    return FIM
+
+def update_ewc_weights_v2(oldFIM, newFIM, accum_idx):
+    '''
+    accum newFIM into oldFIM according to accum_idx.
+    '''
+    return _update_ewc_term(oldFIM, newFIM, accum_idx)

@@ -26,7 +26,8 @@ from incdet3.models.ewc_func import (_init_ewc_weights, _sampling_ewc,
     _compute_FIM_cls_term, _compute_FIM_reg_term, _update_ewc_weights,
     _cycle_next, _update_ewc_term, _compute_accum_grad_v1,
     _compute_FIM_cls2term_v1, _compute_FIM_reg2term_v1,
-    _compute_FIM_clsregterm_v1, _update_ewc_weights_v1)
+    _compute_FIM_clsregterm_v1, _update_ewc_weights_v1,
+    compute_FIM_v2, update_ewc_weights_v2)
 
 class Network(nn.Module):
     HEAD_NEAMES = ["rpn.conv_cls", "rpn.conv_box", "rpn.conv_dir_cls"]
@@ -1256,6 +1257,57 @@ class Network(nn.Module):
                 "ewc_weights": ewc_weights}
         else:
             return ewc_weights
+
+    def compute_ewc_weights_v2(self,
+        dataloader,
+        num_of_datasamples,
+        oldtask_FIM_paths=[],
+        oldtask_FIM_weights=[],
+        newtask_FIM_weight=1.0):
+        '''
+        compute ewc weights after training
+        @dataloader: torch.Dataloader (shuffled)
+        @num_of_datasamples: int
+        @oldtask_FIMs: List
+        @oldtask_FIM_weights: List
+        @newtask_FIM_wegiht: float
+        -> newtask_FIM, FIM {name: param (torch.FloatTensor.cuda)}
+        '''
+        newtask_FIM = _init_ewc_weights(self._model)
+        dataloader_itr = dataloader.__iter__()
+        batch_size = dataloader.batch_size
+        # freeze the batch normalization running mean & var
+        self._training_mode in ["joint_training", "fine_tuning", "lwf"]
+        for i in tqdm(range(num_of_datasamples // batch_size)):
+            # compute loss
+            data, dataloader_itr = _cycle_next(dataloader, dataloader_itr)
+            data = example_convert_to_torch(data,
+                dtype=torch.float32, device=torch.device("cuda:0"))
+            loss = self.forward(data)
+            loss_cls_sum = loss["loss_cls"]
+            loss_reg_sum = loss["loss_reg"]
+            loss_detection_sum = loss_cls_sum + loss_reg_sum
+            tmp_FIM = compute_FIM_v2(loss_detection_sum, self._model)
+            newtask_FIM = update_ewc_weights_v2(newtask_FIM, tmp_FIM, i)
+
+        # load oldtask_FIMs
+        oldtask_FIMs = []
+        for oldtask_FIM_path in oldtask_FIM_paths:
+            oldtask_FIM = read_pkl(oldtask_FIM_path)
+            oldtask_FIM = {name: torch.from_numpy(param).cuda()
+                for name, param in oldtask_FIM.items()}
+            oldtask_FIMs.append(oldtask_FIM)
+        # merge oldtask_FIMs and newtask_FIM:
+        FIM = _init_ewc_weights(self._model)
+        for oldtask_FIM, oldtask_FIM_weight in zip(oldtask_FIMs, oldtask_FIM_weights):
+            for name, param in oldtask_FIM.items():
+                FIM[name] += param * oldtask_FIM_weight
+        for name, param in newtask_FIM.items():
+            FIM[name] += param * newtask_FIM_weight
+        return {
+            "newtask_FIM": newtask_FIM,
+            "FIM": FIM
+        }
 
     def train(self):
         super(Network, self).train(True)

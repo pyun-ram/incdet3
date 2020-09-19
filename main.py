@@ -465,20 +465,11 @@ def compute_ewc_weights(cfg):
               for k, v in cfg.EWC.items() if is_param(k)}
     params["num_of_datasamples"] = num_of_datasamples
     params["dataloader"] = dataloader_train
-    if "@debug_mode" not in cfg.EWC.keys() or not cfg.EWC["@debug_mode"]:
-        ewc_weights = model.compute_ewc_weights_v1(**params)
-        write_pkl({k: v.cpu().numpy() for k, v in ewc_weights.items()},
-            os.path.join(g_save_dir, f"ewc_weights-{model.get_global_step()}.pkl"))
-    else:
-        ewc_weights_dict = model.compute_ewc_weights_v1(**params)
-        write_pkl({k: v.cpu().numpy() for k, v in ewc_weights_dict["cls2_term"].items()},
-            os.path.join(g_save_dir, f"ewc_cls2term-{model.get_global_step()}.pkl"))
-        write_pkl({k: v.cpu().numpy() for k, v in ewc_weights_dict["reg2_term"].items()},
-            os.path.join(g_save_dir, f"ewc_reg2term-{model.get_global_step()}.pkl"))
-        write_pkl({k: v.cpu().numpy() for k, v in ewc_weights_dict["clsreg_term"].items()},
-            os.path.join(g_save_dir, f"ewc_clsregterm-{model.get_global_step()}.pkl"))
-        write_pkl({k: v.cpu().numpy() for k, v in ewc_weights_dict["ewc_weights"].items()},
-            os.path.join(g_save_dir, f"ewc_weights-{model.get_global_step()}.pkl"))
+    ewc_weights_dict = model.compute_ewc_weights_v2(**params)
+    write_pkl({k: v.cpu().numpy() for k, v in ewc_weights_dict["newtask_FIM"].items()},
+        os.path.join(g_save_dir, f"ewc_newtaskFIM-{model.get_global_step()}.pkl"))
+    write_pkl({k: v.cpu().numpy() for k, v in ewc_weights_dict["FIM"].items()},
+        os.path.join(g_save_dir, f"ewc_weights-{model.get_global_step()}.pkl"))
 
 def setup_dir_and_logger(tag):
     global g_log_dir, g_save_dir
