@@ -135,7 +135,7 @@ cfg.NETWORK = {
     "@classes_target": ["Car", "Pedestrian", "Cyclist", "Van", "Truck"],
     "@classes_source": None,
     "@model_resume_dict": {
-        "ckpt_path": "saved_weights/20200913-expkitti2+3-ewc-saved_weights/20200913-expkitti2+3-ewc/IncDetMain-35733.tckpt",
+        "ckpt_path": "saved_weights/20200919-expkitti2+3-ewc-saved_weights/20200919-expkitti2+3-ewc/IncDetMain-TBDstepsTBD.tckpt",
         "num_classes": 2,
         "num_anchor_per_loc": 4,
         "partially_load_params": [],

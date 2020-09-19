@@ -36,11 +36,11 @@
 #     --mode test
 
 CUDA_VISIBLE_DEVICES=$1 python3 main.py \
-    --tag 20200913-expkitti4+1-B5ewcold-eval \
+    --tag 20200919-expkitti4+1-B5ewcold-eval \
     --cfg-path configs/exp-kitti-4+1/B5ewcold-eval.py \
     --mode test
 
 CUDA_VISIBLE_DEVICES=$1 python3 main.py \
-    --tag 20200913-expkitti4+1-B5kdewcold-eval \
+    --tag 20200919-expkitti4+1-B5kdewcold-eval \
     --cfg-path configs/exp-kitti-4+1/B5kdewcold-eval.py \
     --mode test
