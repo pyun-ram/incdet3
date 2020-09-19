@@ -130,7 +130,7 @@ cfg.TESTDATA = {
 
 cfg.NETWORK = {
     "@classes_target": ["Car", "Pedestrian"],
-    "@classes_source": None,
+    "@classes_source": ["Car", "Pedestrian"],
     "@model_resume_dict": {
         "ckpt_path": "saved_weights/20200813-expkitti2+3-saved_weights/train_class2-23200.tckpt",
         "num_classes": 2,
@@ -138,7 +138,13 @@ cfg.NETWORK = {
         "partially_load_params": [],
         "ignore_params": [],
     },
-    "@sub_model_resume_dict": None,
+    "@sub_model_resume_dict": {
+        "ckpt_path": "saved_weights/20200813-expkitti2+3-saved_weights/train_class2-23200.tckpt",
+        "num_classes": 2,
+        "num_anchor_per_loc": 4,
+        "partially_load_params": [],
+        "ignore_params": [],
+    },
     "@voxel_encoder_dict": {
         "name": "SimpleVoxel",
         "@num_input_features": 4,
@@ -168,7 +174,7 @@ cfg.NETWORK = {
         "@box_code_size": 7, # TBD
         "@num_direction_bins": 2,
     },
-    "@training_mode": "train_from_scratch",
+    "@training_mode": "lwf",
     "@is_training": None, #TBD
     "@cls_loss_weight": 1.0,
     "@loc_loss_weight": 2.0,
@@ -211,7 +217,7 @@ cfg.NETWORK = {
         },
     },
     "@hook_layers": [],
-    "@distillation_mode": [],
+    "@distillation_mode": ["distillation_loss"],
     "@bool_reuse_anchor_for_cls": True,
     "@bool_biased_select_with_submodel": True,
     "@bool_delta_use_mask": False,
@@ -226,9 +232,9 @@ cfg.NETWORK = {
 
 cfg.EWC = {
     # "@num_of_datasamples": 200,
-    "@reg2_coef": 1,
-    "@clsreg_coef": 1,
-    "@debug_mode": True
+    "oldtask_FIM_paths": [],
+    "oldtask_FIM_weights": [],
+    "newtask_FIM_weight": 1.0
 }
 
 def modify_cfg(cfg_):

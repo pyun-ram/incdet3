@@ -60,7 +60,7 @@ cfg.TRAINDATA = {
     "num_workers": 8,
     "feature_map_size": [1, 160, 132],
     "@root_path": "/usr/app/data/KITTI/training",
-    "@info_path": "/usr/app/data/KITTI/KITTI_infos_train_cv3-tuning0.pkl",
+    "@info_path": "/usr/app/data/KITTI/KITTI_infos_train_cv3-tuning1.pkl",
     "@class_names": cfg.TARGETASSIGNER["@classes"].copy(),
     "prep": {
         "@training": True,
@@ -101,7 +101,7 @@ cfg.VALDATA = {
     "num_workers": 5,
     "feature_map_size": [1, 160, 132],
     "@root_path": "/usr/app/data/KITTI/training",
-    "@info_path": "/usr/app/data/KITTI/KITTI_infos_val_cv3-tuning0.pkl",
+    "@info_path": "/usr/app/data/KITTI/KITTI_infos_val_cv3-tuning1.pkl",
     "@class_names": cfg.TARGETASSIGNER["@classes"].copy(),
     "prep": {
         "@training": False,
@@ -196,8 +196,8 @@ cfg.NETWORK = {
     "@delta_coef": 0.01,
     "@distillation_loss_cls_coef": 0.1,
     "@distillation_loss_reg_coef": 0.2,
-    "@ewc_coef": 160*132*10,
-    "@ewc_weights_path": "saved_weights/20200912-ewcweights-compute_terms/ewc_weights-23200-reg2coef1-clsregcoef1.pkl",
+    "@ewc_coef": 160*132*0.001,
+    "@ewc_weights_path": "saved_weights/20200919-ewcweights-compute_terms/ewc_weights-23200.pkl",
     "@num_biased_select": 32,
     "@threshold_delta_fgmask": 0.5,
     "@loss_dict": {
@@ -229,7 +229,7 @@ cfg.NETWORK = {
         },
     },
     "@hook_layers": [],
-    "@distillation_mode": ["ewc", "distillation_loss"],
+    "@distillation_mode": ["ewc"],
     "@bool_reuse_anchor_for_cls": True,
     "@bool_biased_select_with_submodel": True,
     "@bool_delta_use_mask": False,

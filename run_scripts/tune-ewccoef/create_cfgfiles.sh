@@ -1,5 +1,5 @@
 #!/bin/bash
-for ewc_coef in 0.01 0.1 1 10 100; do
+for ewc_coef in 0.0001 0.001 0.01 0.1 1; do
 for cv in 0 1 2; do
 python3 tools/create_config_files.py \
     --template-cfg-path configs/tune-ewccoef/kdewc-ewccoef-cv-template.py \
@@ -8,7 +8,7 @@ python3 tools/create_config_files.py \
 done
 done
 
-for ewc_coef in 0.01 0.1 1 10 100; do
+for ewc_coef in 0.0001 0.001 0.01 0.1 1; do
 for cv in 0 1 2; do
 python3 tools/create_config_files.py \
     --template-cfg-path configs/tune-ewccoef/ewc-ewccoef-cv-template.py \
