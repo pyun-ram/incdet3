@@ -149,7 +149,7 @@ cfg.NETWORK = {
         "num_anchor_per_loc": 8,
         "partially_load_params": [],
         "ignore_params": [],
-    },,
+    },
     "@voxel_encoder_dict": {
         "name": "SimpleVoxel",
         "@num_input_features": 4,
