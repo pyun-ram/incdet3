@@ -194,7 +194,7 @@ cfg.NETWORK = {
     "@delta_coef": 0.01,
     "@distillation_loss_cls_coef": 0.1,
     "@distillation_loss_reg_coef": 0.2,
-    "@ewc_coef": 160*132*TBDewc_coefTBD,
+    "@ewc_coef": 160*132*0.01,
     "@ewc_weights_path": "saved_weights/20200919-ewcweights-kitti2+seq-kdewc4/ewc_weights-TBDstepsTBD.pkl",
     "@num_biased_select": 32,
     "@threshold_delta_fgmask": 0.5,
