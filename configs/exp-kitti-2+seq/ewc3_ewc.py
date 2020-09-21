@@ -137,14 +137,14 @@ cfg.NETWORK = {
     "@classes_target": ["Car", "Pedestrian", "Cyclist"],
     "@classes_source": ["Car", "Pedestrian", "Cyclist"],
     "@model_resume_dict": {
-        "ckpt_path": "saved_weights/20200919-expkitti2+seq-weights/ewc_class3-26376.tckpt",
+        "ckpt_path": "saved_weights/20200921-expkitti2+seq-weights/ewc_class3-TBDstepsTBD.tckpt",
         "num_classes": 3,
         "num_anchor_per_loc": 6,
         "partially_load_params": [],
         "ignore_params": [],
     },
     "@sub_model_resume_dict": {
-        "ckpt_path": "saved_weights/20200919-expkitti2+seq-weights/ewc_class3-26376.tckpt",
+        "ckpt_path": "saved_weights/20200921-expkitti2+seq-weights/ewc_class3-TBDstepsTBD.tckpt",
         "num_classes": 3,
         "num_anchor_per_loc": 6,
         "partially_load_params": [],

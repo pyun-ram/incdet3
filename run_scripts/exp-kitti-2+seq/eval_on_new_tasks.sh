@@ -30,11 +30,11 @@
 #     --mode test
 
 CUDA_VISIBLE_DEVICES=$1 python3 main.py \
-    --tag 20200919-expkitti2+seq-B3to5ewcnew-eval \
+    --tag 20200921-expkitti2+seq-B3to5ewcnew-eval \
     --cfg-path configs/exp-kitti-2+seq/B3to5ewcnew-eval.py \
     --mode test
 
 CUDA_VISIBLE_DEVICES=$1 python3 main.py \
-    --tag 20200919-expkitti2+seq-B3to5kdewcnew-eval \
+    --tag 20200921-expkitti2+seq-B3to5kdewcnew-eval \
     --cfg-path configs/exp-kitti-2+seq/B3to5kdewcnew-eval.py \
     --mode test
