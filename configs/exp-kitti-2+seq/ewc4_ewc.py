@@ -241,7 +241,7 @@ cfg.EWC = {
     # "@num_of_datasamples": 200,
     "oldtask_FIM_paths": [
         "saved_weights/20200919-ewcweights-compute_terms/ewc_weights-23200.pkl",
-        "saved_weights/20200921-ewcweights-kitti2+seq-ewc3/ewc_weights-TBDstepsTBD.pkl"
+        "saved_weights/20200921-ewcweights-kitti2+seq-ewc3/ewc_weights-29202.pkl"
     ],
     "oldtask_FIM_weights": [1.0, 1.0],
     "newtask_FIM_weight": 1.0
