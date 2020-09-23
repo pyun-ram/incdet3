@@ -16,11 +16,13 @@ import argparse
 import time
 import torch
 import numpy as np
+from typing import List
 from tqdm import tqdm
 from apex import amp
 from datetime import datetime
+from copy import deepcopy
 from shutil import copy as fcopy
-from det3.ops import write_pkl
+from det3.ops import write_pkl, write_txt
 from det3.utils.utils import proc_param, is_param
 from det3.utils.log_tool import Logger
 from det3.utils.import_tool import load_module
@@ -38,10 +40,137 @@ g_log_dir, g_save_dir = None, None
 g_since = None
 g_use_fp16 = None
 
+def ensemble_pseudo_anno_and_gt(
+    gt_label_dir:str,
+    detection_dir:str,
+    old_classes:List[str],
+    pseudo_anno_dir:str):
+    '''
+    Ensemble detection results and ground-truth labels by
+    1. remove old-class annotations from gt_label
+    2. remove scores from detection result
+    3. merge this two together and save results to pseudo_anno_dir
+
+    '''
+    gt_label_list = os.listdir(gt_label_dir)
+    detection_list = os.listdir(detection_dir)
+    from det3.dataloader.kittidata import KittiLabel
+    from det3.utils.utils import write_str_to_file
+    for label_name in detection_list:
+        gt_label = KittiLabel(os.path.join(gt_label_dir, label_name)).read_label_file(no_dontcare=False)
+        detection = KittiLabel(os.path.join(detection_dir, label_name)).read_label_file()
+        new_label = KittiLabel()
+        for obj in detection.data:
+            obj.score = None
+            new_label.add_obj(obj)
+        for obj in gt_label.data:
+            if obj.type in old_classes:
+                continue
+            new_label.add_obj(obj)
+        write_str_to_file(str(new_label), os.path.join(pseudo_anno_dir, label_name))
+    return
+
+def generate_pseudo_annotation(cfg):
+    if "pseudo_annotation" not in cfg.TRAINDATA.keys():
+        return
+    Logger.log_txt("==========Generate Pseudo Annotations START=========")
+    # build voxelizer and target_assigner
+    voxelizer = build_voxelizer(cfg.VOXELIZER)
+    param = deepcopy(cfg.TARGETASSIGNER)
+    param["@classes"] = cfg.NETWORK["@classes_source"]
+    target_assigner = build_target_assigner(param)
+    # create pseudo dataset
+    ## build network with evaluation mode
+    ## do not change cfg.NETWORK
+    param = deepcopy(cfg.NETWORK)
+    ## modify network._model config and make it same to network._sub_model
+    param["@classes_target"] = param["@classes_source"]
+    param["@model_resume_dict"] = param["@sub_model_resume_dict"]
+    param["@is_training"] = False
+    param["@box_coder"] = target_assigner.box_coder
+    param["@middle_layer_dict"]["@output_shape"] = [1] + voxelizer.grid_size[::-1].tolist() + [16]
+    param = {proc_param(k): v
+        for k, v in param.items() if is_param(k)}
+    network = Network(**param).cuda()
+    ## build dataloader without data augmentation, without shuffle, batch_size 1
+    param = deepcopy(cfg.TRAINDATA)
+    param["prep"]["@augment_dict"] = None
+    param["training"] = False
+    param["prep"]["@training"] = False
+    param["batch_size"] = 1
+    param["num_of_workers"] = 1
+    param["@class_names"] = cfg.NETWORK["@classes_source"]
+    # The following line does not affect actually.
+    param["prep"]["@filter_label_dict"]["keep_classes"] = cfg.NETWORK["@classes_source"]
+    dataloader_train = build_dataloader(
+        data_cfg=param,
+        ext_dict={
+            "voxelizer": voxelizer,
+            "target_assigner": target_assigner,
+            "feature_map_size": param["feature_map_size"]})
+    ## create new labels
+    ### setup tmp dirs: tmp_root
+    data_root_path = cfg.TRAINDATA["@root_path"]
+    data_pc_path = os.path.join(data_root_path, "velodyne")
+    data_calib_path = os.path.join(data_root_path, "calib")
+    data_label_path = os.path.join(data_root_path, "label_2")
+    tmp_root_path = f"/tmp/incdet3-{time.time()}/training"
+    tmp_pc_path = os.path.join(tmp_root_path, "velodyne")
+    tmp_calib_path = os.path.join(tmp_root_path, "calib")
+    tmp_det_path = os.path.join(tmp_root_path, "detections")
+    tmp_label_path = os.path.join(tmp_root_path, "label_2")
+    tmp_splitidx_path = os.path.join(os.path.dirname(tmp_root_path), "split_index")
+    os.makedirs(tmp_root_path, exist_ok=False)
+    os.makedirs(tmp_label_path, exist_ok=False)
+    os.makedirs(tmp_splitidx_path, exist_ok=False)
+    ### soft link lidar dir, calib dir to tmp_root dir
+    os.symlink(data_pc_path, tmp_pc_path)
+    os.symlink(data_calib_path, tmp_calib_path)
+    ### forward model on dataloader and save detections in tmp_root dir
+    network.eval()
+    detections = []
+    tags = [itm["tag"] for itm in dataloader_train.dataset._kitti_infos]
+    calibs = [itm["calib"] for itm in dataloader_train.dataset._kitti_infos]
+    write_txt(sorted(tags), os.path.join(tmp_splitidx_path, "train.txt"))
+    for data in tqdm(dataloader_train):
+        data = example_convert_to_torch(data)
+        detection = network(data)
+        detections.append(detection[0])
+    dataset_type = str(type(dataloader_train.dataset))
+    dataloader_train.dataset.save_detections(detections, tags, calibs, tmp_det_path)
+    ### ensemble the detections and gt labels
+    ensemble_pseudo_anno_and_gt(
+        gt_label_dir=data_label_path,
+        detection_dir=tmp_det_path,
+        old_classes=cfg.NETWORK["@classes_source"],
+        pseudo_anno_dir=tmp_label_path)
+    ## create new info pkls
+    ### create info pkl by system call
+    assert (cfg.TRAINDATA["dataset"] == "kitti",
+        "We currently only support the kitti dataset for pseudo annotation.")
+    cmd = "python3 tools/create_data_pseudo_anno.py "
+    cmd += "--dataset kitti "
+    cmd += f"--data-dir {os.path.dirname(tmp_root_path)}"
+    os.system(cmd)
+    # update cfg.TRAINDATA
+    ### update @root_path, @info_path
+    cfg.TRAINDATA["@root_path"] = tmp_root_path
+    cfg.TRAINDATA["@info_path"] = os.path.join(
+        os.path.dirname(tmp_root_path),
+        "KITTI_infos_train.pkl")
+    ### update classes_to_exclude
+    cfg.TRAINDATA["prep"]["@classes_to_exclude"] = []
+    Logger.log_txt("==========Generate Pseudo Annotations END=========")
+
 def setup_cores(cfg, mode):
     global g_use_fp16
     if mode == "train":
         # build dataloader_train
+        generate_pseudo_annotation(cfg)
+        Logger.log_txt("After generating the pseudo annotation, the cfg.TRAINDATA is ")
+        Logger.log_txt(cfg.TRAINDATA)
+        Logger.log_txt("After generating the pseudo annotation, the cfg.NETWORK is ")
+        Logger.log_txt(cfg.NETWORK)
         voxelizer = build_voxelizer(cfg.VOXELIZER)
         target_assigner = build_target_assigner(cfg.TARGETASSIGNER)
         dataloader_train = build_dataloader(

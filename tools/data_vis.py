@@ -26,7 +26,13 @@ def vis_fn(idx):
     global dataset, data_dir, output_dir
     if dataset == "KITTI":
         from det3.dataloader.kittidata import KittiData
-        calib, img, label, pc = KittiData(data_dir, idx).read_data()
+        output_dict = {
+                "calib": True,
+                "image": False,
+                "label": True,
+                "velodyne": True
+            }
+        calib, img, label, pc = KittiData(data_dir, idx, output_dict=output_dict).read_data()
     elif dataset == "CARLA":
         from det3.dataloader.carladata import CarlaData
         pc_dict, label, calib = CarlaData(data_dir, idx).read_data()
