@@ -27,7 +27,7 @@ from incdet3.models.ewc_func import (_init_ewc_weights, _sampling_ewc,
     _cycle_next, _update_ewc_term, _compute_accum_grad_v1,
     _compute_FIM_cls2term_v1, _compute_FIM_reg2term_v1,
     _compute_FIM_clsregterm_v1, _update_ewc_weights_v1,
-    compute_FIM_v2, update_ewc_weights_v2)
+    compute_FIM_v2, update_ewc_weights_v2, ewc_measure_distance)
 
 class Network(nn.Module):
     HEAD_NEAMES = ["rpn.conv_cls", "rpn.conv_box", "rpn.conv_dir_cls"]
@@ -70,6 +70,8 @@ class Network(nn.Module):
         box_coder=None,
         ewc_weights_path=None,
         ewc_coef=1.0,
+        ewc_loss_type="l2",
+        ewc_huberloss_beta=1e-6,
         ):
         super().__init__()
         self._model = None
@@ -166,6 +168,8 @@ class Network(nn.Module):
 
         if "ewc" in self._distillation_mode:
             self._ewc_weights = self._load_ewc_weights(ewc_weights_path)
+            self._ewc_loss_type = ewc_loss_type
+            self._ewc_huberloss_beta = ewc_huberloss_beta
 
         self._model = Network._build_model_and_init(
             classes=self._classes_target,
@@ -797,8 +801,12 @@ class Network(nn.Module):
             is_head = any([name.startswith(headname) for headname in Network.HEAD_NEAMES])
             if not is_head:
                 diff = param - sub_model_weights[name].detach()
-                diff = diff ** 2
-                loss_alpha += 0.5 * (self._ewc_weights[name] * diff).sum()
+                diff = ewc_measure_distance(
+                    diff=diff,
+                    loss_type=self._ewc_loss_type,
+                    beta=self._ewc_huberloss_beta,
+                    weights=self._ewc_weights[name])
+                loss_alpha += diff.sum()
             else:
                 compute_param_shape = param.shape
                 if name.startswith("rpn.conv_cls"):
@@ -819,8 +827,12 @@ class Network(nn.Module):
                 else:
                     raise NotImplementedError
                 diff = compute_oldparam - sub_model_weights[name].detach()
-                diff = diff ** 2
-                loss_alpha += 0.5 * (self._ewc_weights[name] * diff).sum()
+                diff = ewc_measure_distance(
+                    diff=diff,
+                    loss_type=self._ewc_loss_type,
+                    beta=self._ewc_huberloss_beta,
+                    weights=self._ewc_weights[name])
+                loss_alpha += diff.sum()
         return self._ewc_coef * loss_alpha
 
     def _compute_l2sp_loss(self):

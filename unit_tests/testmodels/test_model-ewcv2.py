@@ -336,5 +336,23 @@ class Test_compute_ewc_weights_v2(unittest.TestCase):
                 torch.from_numpy(old_FIM[name]*0.2).float().cuda() + gt_FIM[name]*1.2,
                 atol=1e-8, rtol=1e-4))
 
+    def test_ewc_measure_distance_l2(self):
+        from incdet3.models.ewc_func import ewc_measure_distance
+        diff = torch.randn(9).reshape(3,3).cuda()
+        loss_type = "l2"
+        beta = 1
+        weights = torch.randn(9).reshape(3,3).cuda()
+        dist = ewc_measure_distance(diff, loss_type, beta, weights)
+        self.assertTrue(torch.all(dist == 0.5*weights*diff**2))
+
+    def test_ewc_measure_distance_huber(self):
+        from incdet3.models.ewc_func import ewc_measure_distance
+        diff = torch.arange(9).reshape(3,3).cuda()
+        loss_type = "huber"
+        beta = 5
+        weights = torch.arange(9).reshape(3,3).cuda()
+        dist = ewc_measure_distance(diff, "huber", beta, weights)
+        self.assertTrue(torch.all(dist == torch.FloatTensor([0.0, 0.5, 4.0, 13.5, 27.5, 37.5, 47.5, 57.5, 67.5]).reshape(3,3).cuda()))
+
 if __name__ == "__main__":
     unittest.main()

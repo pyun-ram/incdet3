@@ -291,3 +291,26 @@ def update_ewc_weights_v2(oldFIM, newFIM, accum_idx):
     accum newFIM into oldFIM according to accum_idx.
     '''
     return _update_ewc_term(oldFIM, newFIM, accum_idx)
+
+def ewc_measure_distance(diff, loss_type, beta, weights):
+    '''
+    measure the distance of diff with L2-norm or huber loss.
+    The huber loss part is from: "Incdet: In Defense of Elastic
+    Weight Consolidation for Incrmental Object Detection", TNNLS2020.
+    @diff: torch.FloatTensor
+    @loss_tyep: str "l2" or "huber"
+    @beta: float
+    @weights: torch.FloatTensor with the same shape as diff
+    -> dist: torch.FloatTensor with the same shape as diff
+    '''
+    if loss_type == "l2":
+        return 0.5 * weights * diff ** 2
+    elif loss_type == "huber":
+        cond_lhs = weights ** 0.5 * torch.abs(diff)
+        mask_l2 = cond_lhs <= beta
+        l2_diff = 0.5 * weights * diff ** 2
+        huber_diff = beta * (weights ** 0.5 * torch.abs(diff) - beta * 0.5)
+        return (mask_l2.float() * l2_diff +
+            torch.logical_not(mask_l2).float() * huber_diff)
+    else:
+        raise NotImplementedError
