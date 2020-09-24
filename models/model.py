@@ -1305,6 +1305,7 @@ class Network(nn.Module):
         # load oldtask_FIMs
         oldtask_FIMs = []
         for oldtask_FIM_path in oldtask_FIM_paths:
+            Logger.log_txt(f"Loading from {oldtask_FIM_path}")
             oldtask_FIM = read_pkl(oldtask_FIM_path)
             oldtask_FIM = {name: torch.from_numpy(param).cuda()
                 for name, param in oldtask_FIM.items()}

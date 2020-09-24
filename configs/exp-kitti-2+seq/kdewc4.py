@@ -6,7 +6,7 @@ cfg = edict()
 
 cfg.TASK = {
     "valid_range": [0, -32.0, -3, 52.8, 32.0, 1],
-    "total_training_steps": 28888,
+    "total_training_steps": TBDstepsTBD,
     "continue_training_steps": int(715/8 * 100),
     "use_fp16": False,
 }
@@ -136,7 +136,7 @@ cfg.NETWORK = {
     "@classes_target": ["Car", "Pedestrian", "Cyclist", "Van"],
     "@classes_source": ["Car", "Pedestrian", "Cyclist"],
     "@model_resume_dict": {
-        "ckpt_path": "saved_weights/20200921-expkitti2+seq-weights/kdewc_class3-28888.tckpt",
+        "ckpt_path": "saved_weights/20200925-expkitti2+seq-weights/kdewc_class3-TBDstepsTBD.tckpt",
         "num_classes": 3,
         "num_anchor_per_loc": 6,
         "partially_load_params": [
@@ -147,7 +147,7 @@ cfg.NETWORK = {
         "ignore_params": [],
     },
     "@sub_model_resume_dict": {
-        "ckpt_path": "saved_weights/20200921-expkitti2+seq-weights/kdewc_class3-28888.tckpt",
+        "ckpt_path": "saved_weights/20200925-expkitti2+seq-weights/kdewc_class3-TBDstepsTBD.tckpt",
         "num_classes": 3,
         "num_anchor_per_loc": 6,
         "partially_load_params": [],
@@ -195,7 +195,9 @@ cfg.NETWORK = {
     "@distillation_loss_cls_coef": 0.1,
     "@distillation_loss_reg_coef": 0.2,
     "@ewc_coef": 160*132*0.1,
-    "@ewc_weights_path": "saved_weights/20200921-ewcweights-kitti2+seq-kdewc3/ewc_weights-28888.pkl",
+    "@ewc_weights_path": "saved_weights/20200925-ewcweights-kitti2+seq-kdewc3/ewc_weights-TBDstepsTBD.pkl",
+    "@ewc_loss_type": "huber", # "l2", "huber"
+    "@ewc_huberloss_beta": TBDbetaTBD,
     "@num_biased_select": 32,
     "@threshold_delta_fgmask": 0.5,
     "@loss_dict": {

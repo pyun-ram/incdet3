@@ -24,17 +24,17 @@
 #     --cfg-path configs/exp-kitti-2+3/B3to5lwfthresholdall-eval.py \
 #     --mode test
 
-# CUDA_VISIBLE_DEVICES=$1 python3 main.py \
-#     --tag 20200921-expkitti2+3-B3to5ewcall-eval \
-#     --cfg-path configs/exp-kitti-2+3/B3to5ewcall-eval.py \
-#     --mode test
-
-# CUDA_VISIBLE_DEVICES=$1 python3 main.py \
-#     --tag 20200921-expkitti2+3-B3to5kdewcall-eval \
-#     --cfg-path configs/exp-kitti-2+3/B3to5kdewcall-eval.py \
-#     --mode test
+CUDA_VISIBLE_DEVICES=$1 python3 main.py \
+    --tag 20200925-expkitti2+3-B3to5ewcall-eval \
+    --cfg-path configs/exp-kitti-2+3/B3to5ewcall-eval.py \
+    --mode test
 
 CUDA_VISIBLE_DEVICES=$1 python3 main.py \
-    --tag 20200923-expkitti2+3-B3to5pseudoewcall-eval \
+    --tag 20200925-expkitti2+3-B3to5kdewcall-eval \
+    --cfg-path configs/exp-kitti-2+3/B3to5kdewcall-eval.py \
+    --mode test
+
+CUDA_VISIBLE_DEVICES=$1 python3 main.py \
+    --tag 20200925-expkitti2+3-B3to5pseudoewcall-eval \
     --cfg-path configs/exp-kitti-2+3/B3to5pseudoewcall-eval.py \
     --mode test

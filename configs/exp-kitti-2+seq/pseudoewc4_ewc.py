@@ -137,14 +137,14 @@ cfg.NETWORK = {
     "@classes_target": ["Car", "Pedestrian", "Cyclist", "Van"],
     "@classes_source": ["Car", "Pedestrian", "Cyclist", "Van"],
     "@model_resume_dict": {
-        "ckpt_path": "saved_weights/20200923-expkitti2+seq-weights/pseudoewc_class4-37464.tckpt",
+        "ckpt_path": "saved_weights/20200925-expkitti2+seq-weights/pseudoewc_class4-TBDstepsTBD.tckpt",
         "num_classes": 4,
         "num_anchor_per_loc": 8,
         "partially_load_params": [],
         "ignore_params": [],
     },
     "@sub_model_resume_dict": {
-        "ckpt_path": "saved_weights/20200923-expkitti2+seq-weights/pseudoewc_class4-37464.tckpt",
+        "ckpt_path": "saved_weights/20200925-expkitti2+seq-weights/pseudoewc_class4-TBDstepsTBD.tckpt",
         "num_classes": 4,
         "num_anchor_per_loc": 8,
         "partially_load_params": [],
@@ -239,12 +239,12 @@ cfg.NETWORK = {
 
 cfg.EWC = {
     # "@num_of_datasamples": 200,
-    "oldtask_FIM_paths": [
+    "@oldtask_FIM_paths": [
         "saved_weights/20200919-ewcweights-compute_terms/ewc_weights-23200.pkl",
-        "saved_weights/20200923-ewcweights-kitti2+seq-pseudoewc3/ewc_weights-37464.pkl"
+        "saved_weights/20200925-ewcweights-kitti2+seq-pseudoewc3/ewc_weights-TBDoldstepsTBD.pkl"
     ],
-    "oldtask_FIM_weights": [1.0, 1.0],
-    "newtask_FIM_weight": 1.0
+    "@oldtask_FIM_weights": [1.0, 1.0],
+    "@newtask_FIM_weight": 1.0
 }
 
 def modify_cfg(cfg_):

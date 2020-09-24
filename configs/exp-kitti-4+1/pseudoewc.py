@@ -199,6 +199,8 @@ cfg.NETWORK = {
     "@distillation_loss_reg_coef": 0.2,
     "@ewc_coef": 160*132*0.1,
     "@ewc_weights_path": "saved_weights/20200919-ewcweights-kitti4+1-compute_terms/ewc_weights-23200.pkl",
+    "@ewc_loss_type": "huber", # "l2", "huber"
+    "@ewc_huberloss_beta": TBDbetaTBD,
     "@num_biased_select": 32,
     "@threshold_delta_fgmask": 0.5,
     "@loss_dict": {
