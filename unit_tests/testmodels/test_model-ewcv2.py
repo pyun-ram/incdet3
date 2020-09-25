@@ -336,6 +336,52 @@ class Test_compute_ewc_weights_v2(unittest.TestCase):
                 torch.from_numpy(old_FIM[name]*0.2).float().cuda() + gt_FIM[name]*1.2,
                 atol=1e-8, rtol=1e-4))
 
+    def test_compute_ewc_weights_v2_oldandnewtasksFIM_diffdim(self):
+        network = build_network().cuda()
+        dataloader = build_dataloader()
+        num_of_datasamples = len(dataloader)
+        est_FIM_dict = network.compute_ewc_weights_v2(dataloader,
+            num_of_datasamples,
+            oldtask_FIM_paths=["unit_tests/data/test_model-ewcv2-newtaskFIM-class2.pkl"],
+            oldtask_FIM_weights=[0],
+            newtask_FIM_weight=1.2)
+        # newtaskFIM should not be equal to FIM
+        flag = True
+        for name, param in network._model.named_parameters():
+            flag = torch.all(est_FIM_dict["newtask_FIM"][name] == est_FIM_dict["FIM"][name])
+            if not flag:
+                break
+        self.assertFalse(flag)
+        # compute gt
+        newtask_FIM_list = []
+        dataloader_itr = dataloader.__iter__()
+        batch_size = dataloader.batch_size
+        for data in dataloader:
+            data = example_convert_to_torch(data,
+                dtype=torch.float32, device=torch.device("cuda:0"))
+            loss = network.forward(data)
+            loss_det = loss["loss_cls"] + loss["loss_reg"]
+            network._model.zero_grad()
+            loss_det.backward()
+            tmp_FIM = {}
+            for name, param in network._model.named_parameters():
+                tmp_FIM[name] = (param.grad **2 if param.grad is not None 
+                    else torch.zeros(1).float().cuda())
+            newtask_FIM_list.append(tmp_FIM)
+        gt_FIM = newtask_FIM_list[0]
+        for i in range(1, len(newtask_FIM_list)):
+            for name, param in gt_FIM.items():
+                gt_FIM[name] += newtask_FIM_list[i][name]
+        for name, pram in gt_FIM.items():
+            gt_FIM[name] /= len(newtask_FIM_list)
+        old_FIM = read_pkl("unit_tests/data/test_model-ewcv2-newtaskFIM-class2.pkl")
+        for name, param in gt_FIM.items():
+            # self.assertTrue(torch.allclose(gt_FIM[name], est_FIM_dict["newtask_FIM"][name], atol=1e-8, rtol=1e-4))
+            # print(name, est_FIM_dict["FIM"][name].sum(), (torch.from_numpy(old_FIM[name]*0.2).float().cuda() + gt_FIM[name]*1.2).sum())
+            self.assertTrue(torch.allclose(est_FIM_dict["FIM"][name],
+                gt_FIM[name]*1.2,
+                atol=1e-8, rtol=1e-4))
+
     def test_ewc_measure_distance_l2(self):
         from incdet3.models.ewc_func import ewc_measure_distance
         diff = torch.randn(9).reshape(3,3).cuda()

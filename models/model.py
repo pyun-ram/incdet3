@@ -27,7 +27,8 @@ from incdet3.models.ewc_func import (_init_ewc_weights, _sampling_ewc,
     _cycle_next, _update_ewc_term, _compute_accum_grad_v1,
     _compute_FIM_cls2term_v1, _compute_FIM_reg2term_v1,
     _compute_FIM_clsregterm_v1, _update_ewc_weights_v1,
-    compute_FIM_v2, update_ewc_weights_v2, ewc_measure_distance)
+    compute_FIM_v2, update_ewc_weights_v2, ewc_measure_distance,
+    parse_numclasses_numanchorperloc, expand_old_weights)
 
 class Network(nn.Module):
     HEAD_NEAMES = ["rpn.conv_cls", "rpn.conv_box", "rpn.conv_dir_cls"]
@@ -1312,9 +1313,20 @@ class Network(nn.Module):
             oldtask_FIMs.append(oldtask_FIM)
         # merge oldtask_FIMs and newtask_FIM:
         FIM = _init_ewc_weights(self._model)
+        # parse num_new_classes, num_new_anchor_per_loc
+        num_new_classes, num_new_anchor_per_loc = parse_numclasses_numanchorperloc(FIM)
+        print(f"num_new_classes: {num_new_classes}")
+        print(f"num_new_anchor_per_loc: {num_new_anchor_per_loc}")
         for oldtask_FIM, oldtask_FIM_weight in zip(oldtask_FIMs, oldtask_FIM_weights):
+            # parse num_old_classes, num_old_anchor_per_loc
+            num_old_classes, num_old_anchor_per_loc = parse_numclasses_numanchorperloc(oldtask_FIM)
+            print(f"num_old_classes: {num_old_classes}")
+            print(f"num_old_anchor_per_loc: {num_old_anchor_per_loc}")
             for name, param in oldtask_FIM.items():
-                FIM[name] += param * oldtask_FIM_weight
+                param = expand_old_weights(name, param,
+                num_new_classes, num_new_anchor_per_loc,
+                num_old_classes, num_old_anchor_per_loc)
+                FIM[name] = FIM[name] + param * oldtask_FIM_weight
         for name, param in newtask_FIM.items():
             FIM[name] += param * newtask_FIM_weight
         return {

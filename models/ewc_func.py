@@ -314,3 +314,61 @@ def ewc_measure_distance(diff, loss_type, beta, weights):
             torch.logical_not(mask_l2).float() * huber_diff)
     else:
         raise NotImplementedError
+
+def parse_numclasses_numanchorperloc(FIM: dict)->(int, int):
+    '''
+    parse num_classes and num_anchor_per_loc from FIM
+    @FIM: fisher information matrix (dict)
+        {name: param}
+    -> num_classes, num_anchor_per_loc
+    '''
+    parse_cls_conv_layer = {
+        2*i*i: {"num_classes": i, "num_anchor_per_loc": 2*i}
+        for i in range(1, 11)}
+    num_conv_cls_bias = FIM["rpn.conv_cls.bias"].shape[0]
+    num_classes = parse_cls_conv_layer[num_conv_cls_bias]["num_classes"]
+    num_anchor_per_loc = parse_cls_conv_layer[num_conv_cls_bias]["num_anchor_per_loc"]
+    return num_classes, num_anchor_per_loc
+
+def expand_old_weights(
+    name:str,
+    param:torch.FloatTensor,
+    num_new_classes:int,
+    num_new_anchor_per_loc:int,
+    num_old_classes:int,
+    num_old_anchor_per_loc:int) -> torch.FloatTensor:
+    '''
+    expand param if it is the head of SECOND
+    -> expanded_param: torch.FloatTensor
+    '''
+    param_shape = param.shape
+    if "rpn.conv_cls" in name:
+        expanded_param = torch.zeros([
+            num_new_anchor_per_loc,
+            num_new_classes,
+            *param_shape[1:]], dtype=param.dtype, device=param.device)
+        old_tmp = param.reshape(
+            num_old_anchor_per_loc,
+            num_old_classes,
+            *param_shape[1:])
+        expanded_param[:num_old_anchor_per_loc, :num_old_classes, ...] = \
+            old_tmp[:num_old_anchor_per_loc, :num_old_classes, ...]
+    elif "rpn.conv_box" in name:
+        expanded_param = torch.zeros([
+            num_new_anchor_per_loc,
+            7, *param_shape[1:]], dtype=param.dtype, device=param.device)
+        old_tmp = param.reshape(num_old_anchor_per_loc, 7, *param_shape[1:])
+        expanded_param[:num_old_anchor_per_loc, ...] = \
+            old_tmp[:num_old_anchor_per_loc, ...]
+    elif "rpn.conv_dir_cls" in name:
+        expanded_param = torch.zeros([
+            num_new_anchor_per_loc,
+            2, *param_shape[1:]], dtype=param.dtype, device=param.device)
+        if torch.all(param == 0):
+            return expanded_param.reshape(-1, *param_shape[1:]).contiguous()
+        old_tmp = param.reshape(num_old_anchor_per_loc, 2, *param_shape[1:])
+        expanded_param[:num_old_anchor_per_loc, ...] = \
+            old_tmp[:num_old_anchor_per_loc, ...]
+    else:
+        return param
+    return expanded_param.reshape(-1, *param_shape[1:]).contiguous()
