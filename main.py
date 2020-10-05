@@ -231,7 +231,7 @@ def setup_cores(cfg, mode):
         network = Network(**param).cuda()
         # build optimizer & lr_scheduler
         optimizer, lr_scheduler = None, None
-    elif mode == "compute_ewc_weights":
+    elif mode in ["compute_ewc_weights", "compute_mas_weights"]:
         voxelizer = build_voxelizer(cfg.VOXELIZER)
         target_assigner = build_target_assigner(cfg.TARGETASSIGNER)
         dataloader_train = build_dataloader(
@@ -600,6 +600,30 @@ def compute_ewc_weights(cfg):
     write_pkl({k: v.cpu().numpy() for k, v in ewc_weights_dict["FIM"].items()},
         os.path.join(g_save_dir, f"ewc_weights-{model.get_global_step()}.pkl"))
 
+def compute_mas_weights(cfg):
+    global g_log_dir, g_save_dir
+    cores = setup_cores(cfg, mode="compute_mas_weights")
+    model = cores["model"]
+    dataloader_train = cores["dataloader_train"]
+    if "@num_of_datasamples" in cfg.MAS.keys():
+        num_of_datasamples = cfg.MAS["@num_of_datasamples"]
+    else:
+        num_of_datasamples = len(dataloader_train.dataset)
+    params = {proc_param(k): v
+              for k, v in cfg.MAS.items() if is_param(k)}
+    params["num_of_datasamples"] = num_of_datasamples
+    params["dataloader"] = dataloader_train
+    print(params)
+    mas_weights_dict = model.compute_mas_weights(**params)
+    write_pkl({k: v.cpu().numpy() for k, v in mas_weights_dict["new_omega"].items()},
+        os.path.join(g_save_dir, f"mas_newomega-{model.get_global_step()}.pkl"))
+    write_pkl({k: v.cpu().numpy() for k, v in mas_weights_dict["omega"].items()},
+        os.path.join(g_save_dir, f"mas_omega-{model.get_global_step()}.pkl"))
+    write_pkl({k: v.cpu().numpy() for k, v in mas_weights_dict["new_clsterm"].items()},
+        os.path.join(g_save_dir, f"mas_newclsterm-{model.get_global_step()}.pkl"))
+    write_pkl({k: v.cpu().numpy() for k, v in mas_weights_dict["new_regterm"].items()},
+        os.path.join(g_save_dir, f"mas_newregterm-{model.get_global_step()}.pkl"))
+
 def setup_dir_and_logger(tag):
     global g_log_dir, g_save_dir
     root_dir = "./"
@@ -638,7 +662,8 @@ if __name__ == "__main__":
                         type=str, metavar='CFG',
                         help='config file path')
     parser.add_argument('--mode',
-        choices = ['train', 'test', 'compute_channel_weights', 'compute_ewc_weights'],
+        choices = ['train', 'test', 'compute_channel_weights', 'compute_ewc_weights',
+                   'compute_mas_weights'],
         default = 'test')
     args = parser.parse_args()
     cfg_path = args.cfg_path
@@ -657,5 +682,7 @@ if __name__ == "__main__":
         raise NotImplementedError
     elif args.mode == "compute_ewc_weights":
         compute_ewc_weights(cfg)
+    elif args.mode == "compute_mas_weights":
+        compute_mas_weights(cfg)
     else:
         raise NotImplementedError

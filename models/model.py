@@ -24,11 +24,11 @@ from incdet3.utils.utils import bcolors
 from incdet3.builders.dataloader_builder import example_convert_to_torch
 from incdet3.models.ewc_func import (_init_ewc_weights, _sampling_ewc,
     _compute_FIM_cls_term, _compute_FIM_reg_term, _update_ewc_weights,
-    _cycle_next, _update_ewc_term, _compute_accum_grad_v1,
-    _compute_FIM_cls2term_v1, _compute_FIM_reg2term_v1,
-    _compute_FIM_clsregterm_v1, _update_ewc_weights_v1,
-    compute_FIM_v2, update_ewc_weights_v2, ewc_measure_distance,
-    parse_numclasses_numanchorperloc, expand_old_weights)
+    _cycle_next, _update_ewc_term, compute_FIM_v2, update_ewc_weights_v2,
+    ewc_measure_distance, parse_numclasses_numanchorperloc, expand_old_weights)
+from incdet3.models.mas_func import (_init_mas_weights, _sampling_mas,
+    _compute_omega_cls_term, _compute_omega_reg_term, _compute_omega,
+    _update_mas_term)
 
 class Network(nn.Module):
     HEAD_NEAMES = ["rpn.conv_cls", "rpn.conv_box", "rpn.conv_dir_cls"]
@@ -1156,6 +1156,7 @@ class Network(nn.Module):
             Please setup the reg_sigma_prior=1 if debug_mode=True.
         -> ewc_weights {name: param (torch.FloatTensor.cuda)}
         '''
+        assert False, "This function has been discarded."
         ## compute FIM
         ewc_weights = _init_ewc_weights(self._model)
         if debug_mode:
@@ -1207,6 +1208,7 @@ class Network(nn.Module):
         @debug_mode: if True, return the cls2_term, reg2_term and clsreg_term.
         -> ewc_weights {name: param (torch.FloatTensor.cuda)}
         '''
+        assert False, "This function has been discarded."
         ## compute FIM
         ewc_weights = _init_ewc_weights(self._model)
         final_cls2_term = _init_ewc_weights(self._model)
@@ -1274,9 +1276,9 @@ class Network(nn.Module):
     def compute_ewc_weights_v2(self,
         dataloader,
         num_of_datasamples,
-        oldtask_FIM_paths=[],
-        oldtask_FIM_weights=[],
-        newtask_FIM_weight=1.0):
+        oldtask_FIM_paths,
+        oldtask_FIM_weights,
+        newtask_FIM_weight):
         '''
         compute ewc weights after training
         @dataloader: torch.Dataloader (shuffled)
@@ -1332,6 +1334,92 @@ class Network(nn.Module):
         return {
             "newtask_FIM": newtask_FIM,
             "FIM": FIM
+        }
+
+    def compute_mas_weights(
+        self,
+        dataloader,
+        num_of_datasamples,
+        num_of_anchorsamples,
+        anchor_sample_strategy,
+        reg_coef,
+        oldtask_omega_paths,
+        oldtask_omega_weights,
+        newtask_omega_weight):
+        '''
+        compute mas weights after training
+        @dataloader: torch.Dataloader (shuffled)
+        @num_of_datasamples: int
+        @num_of_anchorsamples: int
+        @anchor_sample_strategy: str "biased", "unbiased", "all"
+        @reg_coef: float
+        @oldtask_omega_paths: List
+        @oldtask_omega_weights: List
+        @newtask_omega_weight: float
+        -> mas_omega {name: param (torch.FloatTensor.cuda)}
+        -> mas_newomega {name: param (torch.FloatTensor.cuda)}
+        -> mas_clsterm {name: param (torch.FloatTensor.cuda)}
+        -> mas_regterm {name: param (torch.FloatTensor.cuda)} (without reg_coef weighted)
+        '''
+        ## compute FIM
+        final_cls_term = _init_mas_weights(self._model)
+        final_reg_term = _init_mas_weights(self._model)
+        dataloader_itr = dataloader.__iter__()
+        batch_size = dataloader.batch_size
+        self.eval()
+        for i in tqdm(range(num_of_datasamples // batch_size)):
+            data, dataloader_itr = _cycle_next(dataloader, dataloader_itr)
+            data = example_convert_to_torch(data,
+                dtype=torch.float32, device=torch.device("cuda:0"))
+            voxels = data["voxels"]
+            num_points = data["num_points"]
+            coors = data["coordinates"]
+            batch_anchors = data["anchors"]
+            preds_dict = self._network_forward(self._model, voxels, num_points, coors, batch_size)
+            num_of_classes = preds_dict["cls_preds"].shape[-1]
+            size_of_reg_encode = preds_dict["box_preds"].shape[-1]
+            cls_preds = preds_dict["cls_preds"].reshape(batch_size, -1, num_of_classes)
+            box_preds = preds_dict["box_preds"].reshape(batch_size, -1, size_of_reg_encode)
+            selected_cls, selected_box = _sampling_mas(cls_preds, box_preds,
+                sample_strategy=anchor_sample_strategy,
+                num_of_samples=num_of_anchorsamples)
+
+            cls_term = _compute_omega_cls_term(selected_cls, self._model)
+            reg_term = _compute_omega_reg_term(selected_box, self._model)
+            final_cls_term = _update_mas_term(final_cls_term, cls_term, i)
+            final_reg_term = _update_mas_term(final_reg_term, reg_term, i)
+        newomega = _compute_omega(final_cls_term, final_reg_term, reg_coef)
+        # load oldtask_omegas
+        oldtask_omegas = []
+        for oldtask_omega_path in oldtask_omega_paths:
+            Logger.log_txt(f"Loading from {oldtask_omega_path}")
+            oldtask_omega = read_pkl(oldtask_omega_path)
+            oldtask_omega = {name: torch.from_numpy(param).cuda()
+                for name, param in oldtask_omega.items()}
+            oldtask_omegas.append(oldtask_omega)
+        # merge oldtask_FIMs and newtask_FIM:
+        omega = _init_mas_weights(self._model)
+        # parse num_new_classes, num_new_anchor_per_loc
+        num_new_classes, num_new_anchor_per_loc = parse_numclasses_numanchorperloc(omega)
+        print(f"num_new_classes: {num_new_classes}")
+        print(f"num_new_anchor_per_loc: {num_new_anchor_per_loc}")
+        for oldtask_omega, oldtask_omega_weight in zip(oldtask_omegas, oldtask_omega_weights):
+            # parse num_old_classes, num_old_anchor_per_loc
+            num_old_classes, num_old_anchor_per_loc = parse_numclasses_numanchorperloc(oldtask_omega)
+            print(f"num_old_classes: {num_old_classes}")
+            print(f"num_old_anchor_per_loc: {num_old_anchor_per_loc}")
+            for name, param in oldtask_omega.items():
+                param = expand_old_weights(name, param,
+                num_new_classes, num_new_anchor_per_loc,
+                num_old_classes, num_old_anchor_per_loc)
+                omega[name] = omega[name] + param * oldtask_omega_weight
+        for name, param in newomega.items():
+            omega[name] += param * newtask_omega_weight
+        return {
+            "new_omega": newomega,
+            "new_clsterm": final_cls_term,
+            "new_regterm": final_reg_term,
+            "omega": omega,
         }
 
     def train(self):

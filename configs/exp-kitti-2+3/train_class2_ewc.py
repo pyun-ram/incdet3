@@ -232,9 +232,9 @@ cfg.NETWORK = {
 
 cfg.EWC = {
     # "@num_of_datasamples": 200,
-    "oldtask_FIM_paths": [],
-    "oldtask_FIM_weights": [],
-    "newtask_FIM_weight": 1.0
+    "@oldtask_FIM_paths": [],
+    "@oldtask_FIM_weights": [],
+    "@newtask_FIM_weight": 1.0
 }
 
 def modify_cfg(cfg_):
