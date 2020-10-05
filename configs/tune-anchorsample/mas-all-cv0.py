@@ -196,7 +196,7 @@ cfg.NETWORK = {
     "@delta_coef": 0.01,
     "@distillation_loss_cls_coef": 0.1,
     "@distillation_loss_reg_coef": 0.2,
-    "@ewc_coef": 1,
+    "@ewc_coef": 0.1,
     "@ewc_weights_path": "saved_weights/20201005-masweights-tuneanchorsample/mas_weights-all-23200.pkl",
     "@num_biased_select": 32,
     "@threshold_delta_fgmask": 0.5,
