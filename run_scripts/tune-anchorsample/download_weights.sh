@@ -8,6 +8,6 @@ wget --no-check-certificate \
 unzip incdet-saveweights.zip
 
 wget --no-check-certificate \
-     --no-proxy 'https://pyun-data.s3.amazonaws.com/IncDet3/Weights/20201005-masweights-tuneanchorsample.zip' \
+     --no-proxy 'https://pyun-data-hk.s3.ap-east-1.amazonaws.com/IncDet3/Weights/20201005-masweights-tuneanchorsample.zip' \
      --output-document=/usr/app/incdet3/saved_weights/incdet-saveweights.zip
 unzip incdet-saveweights.zip
