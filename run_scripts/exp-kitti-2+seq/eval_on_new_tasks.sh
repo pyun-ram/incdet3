@@ -29,17 +29,27 @@
 #     --cfg-path configs/exp-kitti-2+seq/B3to5lwfthresholdnew-eval.py \
 #     --mode test
 
+# CUDA_VISIBLE_DEVICES=$1 python3 main.py \
+#     --tag 20200925-expkitti2+seq-B3to5ewcnew-eval \
+#     --cfg-path configs/exp-kitti-2+seq/B3to5ewcnew-eval.py \
+#     --mode test
+
+# CUDA_VISIBLE_DEVICES=$1 python3 main.py \
+#     --tag 20200925-expkitti2+seq-B3to5kdewcnew-eval \
+#     --cfg-path configs/exp-kitti-2+seq/B3to5kdewcnew-eval.py \
+#     --mode test
+
+# CUDA_VISIBLE_DEVICES=$1 python3 main.py \
+#     --tag 20200925-expkitti2+seq-B3to5pseudoewcnew-eval \
+#     --cfg-path configs/exp-kitti-2+seq/B3to5pseudoewcnew-eval.py \
+#     --mode test
+
 CUDA_VISIBLE_DEVICES=$1 python3 main.py \
-    --tag 20200925-expkitti2+seq-B3to5ewcnew-eval \
-    --cfg-path configs/exp-kitti-2+seq/B3to5ewcnew-eval.py \
+    --tag 20201008-expkitti2+seq-B3to5masnew-eval \
+    --cfg-path configs/exp-kitti-2+seq/B3to5masnew-eval.py \
     --mode test
 
 CUDA_VISIBLE_DEVICES=$1 python3 main.py \
-    --tag 20200925-expkitti2+seq-B3to5kdewcnew-eval \
-    --cfg-path configs/exp-kitti-2+seq/B3to5kdewcnew-eval.py \
-    --mode test
-
-CUDA_VISIBLE_DEVICES=$1 python3 main.py \
-    --tag 20200925-expkitti2+seq-B3to5pseudoewcnew-eval \
-    --cfg-path configs/exp-kitti-2+seq/B3to5pseudoewcnew-eval.py \
+    --tag 20201008-expkitti2+seq-B3to5kdmasnew-eval \
+    --cfg-path configs/exp-kitti-2+seq/B3to5kdmasnew-eval.py \
     --mode test
