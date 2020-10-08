@@ -137,14 +137,14 @@ cfg.NETWORK = {
     "@classes_target": ["Car", "Pedestrian", "Cyclist", "Van"],
     "@classes_source": ["Car", "Pedestrian", "Cyclist", "Van"],
     "@model_resume_dict": {
-        "ckpt_path": "saved_weights/20201008-expkitti2+seq-weights/mas_class4-TBDstepsTBD.tckpt",
+        "ckpt_path": "saved_weights/20201008-expkitti2+seq-weights/mas_class4-36126.tckpt",
         "num_classes": 4,
         "num_anchor_per_loc": 8,
         "partially_load_params": [],
         "ignore_params": [],
     },
     "@sub_model_resume_dict": {
-        "ckpt_path": "saved_weights/20201008-expkitti2+seq-weights/mas_class4-TBDstepsTBD.tckpt",
+        "ckpt_path": "saved_weights/20201008-expkitti2+seq-weights/mas_class4-36126.tckpt",
         "num_classes": 4,
         "num_anchor_per_loc": 8,
         "partially_load_params": [],
@@ -243,7 +243,7 @@ cfg.MAS = {
     "@reg_coef": 1,
     "@oldtask_omega_paths": [
         "saved_weights/20201007-masweights-class2/mas_omega-23200.pkl",
-        "saved_weights/20201008-masweights-kitti2+seq-mas3/mas_omega-TBDoldstepsTBD.pkl"
+        "saved_weights/20201008-masweights-kitti2+seq-mas3/mas_omega-27632.pkl"
     ],
     "@oldtask_omega_weights": [1.0, 1.0],
     "@newtask_omega_weight": 1.0
