@@ -51,11 +51,11 @@
 #     --mode test
 
 CUDA_VISIBLE_DEVICES=$1 python3 main.py \
-    --tag 20201008-expkitti4+1-B5masnew-eval \
-    --cfg-path configs/exp-kitti-4+1/B5masnew-eval.py \
+    --tag 20201008-expkitti4+1-B5masold-eval \
+    --cfg-path configs/exp-kitti-4+1/B5masold-eval.py \
     --mode test
 
 CUDA_VISIBLE_DEVICES=$1 python3 main.py \
-    --tag 20201008-expkitti4+1-B5kdmasnew-eval \
-    --cfg-path configs/exp-kitti-4+1/B5kdmasnew-eval.py \
+    --tag 20201008-expkitti4+1-B5kdmasold-eval \
+    --cfg-path configs/exp-kitti-4+1/B5kdmasold-eval.py \
     --mode test
