@@ -113,7 +113,6 @@ class Test_nusckittidata_general(unittest.TestCase):
         from det3.dataloader.kittidata import KittiCalib
         detections = []
         for i, data in enumerate(self.dataloader):
-            print(i)
             label = data["metadata"][0]["label"]
             tag = data["metadata"][0]["tag"]
             cls_pred = torch.from_numpy(data["labels"]).cuda().float()
