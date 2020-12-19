@@ -49,7 +49,7 @@ cfg.TARGETASSIGNER = {
 }
 
 cfg.TRAINDATA = {
-    "dataset": "kitti-nusc", # carla, nusc, kitti
+    "dataset": "nusc-kitti", # carla, nusc, kitti
     "training": True,
     "batch_size": 8,
     "num_workers": 8,
@@ -90,7 +90,7 @@ cfg.TRAINDATA = {
 
 
 cfg.VALDATA = {
-    "dataset": "kitti-nusc", # carla
+    "dataset": "nusc-kitti", # carla
     "training": False,
     "batch_size": 1,
     "num_workers": 5,
@@ -111,7 +111,7 @@ cfg.VALDATA = {
 }
 
 cfg.TESTDATA = {
-    "dataset": "kitti", # carla
+    "dataset": "nusc-kitti", # carla
     "training": False,
     "batch_size": 1,
     "num_workers": 5,
