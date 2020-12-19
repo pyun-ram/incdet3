@@ -15,10 +15,10 @@ from incdet3.builders.dataloader_builder import build
 class Test_nusckittidata_general(unittest.TestCase):
     VOXELIZER_cfg = {
         "type": "VoxelizerV1",
-        "@voxel_size": [0.05, 0.05, 1],
-        "@point_cloud_range": [-100, -100, -10, 100.0, 100.0, 10],
+        "@voxel_size": [0.05, 0.05, 0.2],
+        "@point_cloud_range": [0, -32.0, -5, 52.08, 32.0, 3],
         "@max_num_points": 5,
-        "@max_voxels": 20000
+        "@max_voxels": 30000
     }
     TARGETASSIGNER_cfg = {
         "type": "TaskAssignerV1",
@@ -35,7 +35,7 @@ class Test_nusckittidata_general(unittest.TestCase):
             "AnchorGenerator": {
                 "type": "AnchorGeneratorBEV",
                 "@class_name": "car",
-                "@anchor_ranges": [-100, -100, 0, 100, 100, 0], # TBD in modify_cfg(cfg)
+                "@anchor_ranges": [0, -32.0, 0, 52.08, 32.0, 0], # TBD in modify_cfg(cfg)
                 "@sizes": [1.6, 3.9, 1.56], # wlh
                 "@rotations": [0, 1.57],
                 "@match_threshold": 0.6,
@@ -49,7 +49,7 @@ class Test_nusckittidata_general(unittest.TestCase):
             "AnchorGenerator": {
                 "type": "AnchorGeneratorBEV",
                 "@class_name": "pedestrian",
-                "@anchor_ranges": [-100, -100, 0, 100, 100, 0], # TBD in modify_cfg(cfg)
+                "@anchor_ranges": [0, -32.0, 0, 52.08, 32.0, 0], # TBD in modify_cfg(cfg)
                 "@sizes": [0.6, 0.8, 1.73], # wlh
                 "@rotations": [0, 1.57],
                 "@match_threshold": 0.6,
@@ -75,7 +75,7 @@ class Test_nusckittidata_general(unittest.TestCase):
             {
                 "keep_classes": ["car", "pedestrian"],
                 "min_num_pts": -1,
-                "label_range": [-100, -100, -10, 100, 100, 10],
+                "label_range": [0, -32.0, -5, 52.08, 32.0, 3],
                 # [min_x, min_y, min_z, max_x, max_y, max_z] FIMU
             },
             "@feature_map_size": [1, 200, 176] # TBD
@@ -161,7 +161,9 @@ class Test_nusckittidata_general(unittest.TestCase):
                 detections.append(predictions_dict)
         val_ap_dict = self.dataloader.dataset.evaluation(detections=detections,
             label_dir="/usr/app/data/nusc-kitti/training/label_2",
-            output_dir="/tmp/")
+            output_dir="/tmp/",
+            x_range=(0, 52.08),
+            y_range=(-35.2, 35.2))
         self.assertTrue(val_ap_dict['detail']['car']["3d@0.50"][0] > 90)
         self.assertTrue(val_ap_dict['detail']['pedestrian']["3d@0.25"][0] > 90)
         print(val_ap_dict["result"])
