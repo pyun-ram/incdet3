@@ -211,6 +211,7 @@ def prep_pointcloud(input_dict,
     gt_label = input_dict["cam"]["label"]
     pc_Flidar = input_dict["lidar"]["points"]
     pc = pc_Flidar[:, :3]
+    pc_feat = pc_Flidar[:, 3:]
 
     label, calib, pc = db_sampling(pc=pc,
                                    gt_calib=gt_calib,
@@ -226,6 +227,7 @@ def prep_pointcloud(input_dict,
                             calib=calib,
                             label=label,
                             filter_label_dict=filter_label_dict)
+    pc = np.concatenate([pc, pc_feat], axis=1)
     vox_res = voxelizing(pc=pc,
                          voxelizer=voxelizer)
     anchor_res = anchor_creating(target_assigner=target_assigner,

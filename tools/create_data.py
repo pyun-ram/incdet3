@@ -140,8 +140,12 @@ def create_info_file_kitti_wk_fn(idx):
     pc_path = str(root_dir/"velodyne"/f"{tag}.bin")
     reduced_pc_path = str(root_dir/"reduced_velodyne"/f"{tag}.bin")
     img_path = str(root_dir/"image_2"/f"{tag}.png")
-    calib, _, label, pc_Flidar = KittiData(root_dir=str(root_dir), idx=tag,
-                                           output_dict=output_dict).read_data()
+    if "nusc" in root_dir:
+        calib, _, label, pc_Flidar = KittiData(root_dir=str(root_dir), idx=tag,
+                                               output_dict=output_dict).read_data(num_feature=5)
+    else:
+        calib, _, label, pc_Flidar = KittiData(root_dir=str(root_dir), idx=tag,
+                                               output_dict=output_dict).read_data()
     mask = reduce_pc(pc_Flidar, calib)
     pc_reduced_Flidar = pc_Flidar[mask, :]
     with open(reduced_pc_path, 'wb') as f:

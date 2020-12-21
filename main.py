@@ -431,8 +431,12 @@ def vis_fn_kitti(data_dir,
         "label": True,
         "velodyne": True
     }
-    calib, _, label, pc = KittiData(data_dir,
-        idx,output_dict=output_dict).read_data()
+    if "nusc" in data_dir:
+        calib, _, label, pc = KittiData(data_dir,
+            idx,output_dict=output_dict).read_data(num_feature=5)
+    else:
+        calib, _, label, pc = KittiData(data_dir,
+            idx,output_dict=output_dict).read_data()
     bevimg = BEVImage(x_range, y_range, grid_size)
     bevimg.from_lidar(pc)
     for obj in label.data:

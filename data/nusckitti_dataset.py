@@ -1,8 +1,10 @@
 import os
+import numpy as np
 from typing import List, Dict, Tuple
 from det3.methods.second.data import kitti_common as kitti
 from second.utils.eval import get_official_eval_result_nusckitti
 from .kittidataset import KittiDataset
+from det3.ops import read_bin
 
 class NuscenesKittiDataset(KittiDataset):
     def __init__(self,
@@ -18,6 +20,27 @@ class NuscenesKittiDataset(KittiDataset):
             prep_func,
             prep_info_func
         )
+
+    def get_sensor_data(self, query):
+        idx = query
+        info = self._kitti_infos[idx]
+        calib = info["calib"]
+        label = info["label"]
+        tag = info["tag"]
+        pc_reduced = read_bin(info["reduced_pc_path"], dtype=np.float32).reshape(-1, 5)
+        res = {
+            "lidar": {
+                "points": pc_reduced,
+            },
+            "metadata": {
+                "tag": tag
+            },
+            "calib": calib,
+            "cam": {
+                "label": label
+            }
+        }
+        return res
 
     def evaluation(self, detections, label_dir, output_dir, x_range=None, y_range=None):
         tags = [itm["tag"] for itm in self._kitti_infos]
