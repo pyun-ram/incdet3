@@ -32,7 +32,7 @@ cfg.VOXELIZER = {
     "@voxel_size": [0.05, 0.05, 0.2],
     "@point_cloud_range": cfg.TASK["valid_range"].copy(),
     "@max_num_points": 5,
-    "@max_voxels": 40000
+    "@max_voxels": 60000
 }
 
 cfg.TARGETASSIGNER = {
@@ -131,11 +131,11 @@ cfg.NETWORK = {
     "@classes_target": ["car", "pedestrian"],
     "@classes_source": None,
     "@model_resume_dict": {
-        "ckpt_path": "saved_weights/20201221-expnusckitti2+3-train_class2-mergesweep/IncDetMain-901.tckpt",
+        "ckpt_path": "saved_weights/20200813-expkitti2+3-saved_weights/train_class2-23200.tckpt",
         "num_classes": 2,
         "num_anchor_per_loc": 4,
         "partially_load_params": [],
-        "ignore_params": [],
+        "ignore_params": ["middle_layer.middle_conv.0.weight"],
     },
     "@sub_model_resume_dict": None,
     "@voxel_encoder_dict": {
