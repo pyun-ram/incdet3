@@ -1292,7 +1292,7 @@ class Network(nn.Module):
         dataloader_itr = dataloader.__iter__()
         batch_size = dataloader.batch_size
         # freeze the batch normalization running mean & var
-        self._training_mode in ["joint_training", "fine_tuning", "lwf"]
+        self.eval()
         for i in tqdm(range(num_of_datasamples // batch_size)):
             # compute loss
             data, dataloader_itr = _cycle_next(dataloader, dataloader_itr)

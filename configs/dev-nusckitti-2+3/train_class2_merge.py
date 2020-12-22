@@ -51,8 +51,8 @@ cfg.TARGETASSIGNER = {
 cfg.TRAINDATA = {
     "dataset": "nusc-kitti", # carla, nusc, kitti
     "training": True,
-    "batch_size": 8,
-    "num_workers": 8,
+    "batch_size": 4,
+    "num_workers": 4,
     "feature_map_size": [1, 160, 132],
     "@root_path": "/usr/app/data/nusc-kitti-mergesweep/training",
     "@info_path": "/usr/app/data/nusc-kitti-mergesweep/KITTI_infos_train.pkl",
@@ -130,13 +130,7 @@ cfg.TESTDATA = {
 cfg.NETWORK = {
     "@classes_target": ["car", "pedestrian"],
     "@classes_source": None,
-    "@model_resume_dict": {
-        "ckpt_path": "saved_weights/20200813-expkitti2+3-saved_weights/train_class2-23200.tckpt",
-        "num_classes": 2,
-        "num_anchor_per_loc": 4,
-        "partially_load_params": [],
-        "ignore_params": ["middle_layer.middle_conv.0.weight"],
-    },
+    "@model_resume_dict": None,
     "@sub_model_resume_dict": None,
     "@voxel_encoder_dict": {
         "name": "SimpleVoxel",
@@ -153,11 +147,11 @@ cfg.NETWORK = {
         "name": "ResNetRPN",
         "@use_norm": True,
         "@num_class": None, # TBD in Network._build_model_and_init()
-        "@layer_nums": [5],
-        "@layer_strides": [1],
-        "@num_filters": [128],
-        "@upsample_strides": [1],
-        "@num_upsample_filters": [128],
+        "@layer_nums": [5, 5],
+        "@layer_strides": [1, 2],
+        "@num_filters": [128, 256],
+        "@upsample_strides": [1, 2],
+        "@num_upsample_filters": [256, 256],
         "@num_input_features": 128,
         "@num_anchor_per_loc": None, # TBD in Network._build_model_and_init()
         "@encode_background_as_zeros": True,
