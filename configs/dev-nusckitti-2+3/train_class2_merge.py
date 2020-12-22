@@ -210,9 +210,9 @@ cfg.NETWORK = {
     "@bool_delta_use_mask": False,
     "@bool_oldclassoldanchor_predicts_only": False,
     "@post_center_range": cfg.TASK["valid_range"].copy(),
-    "@nms_score_thresholds": [0.3],
+    "@nms_score_thresholds": [0.05],
     "@nms_pre_max_sizes": [1000],
-    "@nms_post_max_sizes": [100],
+    "@nms_post_max_sizes": [300],
     "@nms_iou_thresholds": [0.01],
     "@box_coder": None #TBD in main.py
 }
@@ -222,25 +222,25 @@ def modify_cfg(cfg_):
     class_list = cfg_.TARGETASSIGNER["@classes"]
     # TODO: TBD for nusc datast
     class2anchor_range = {
-        "car": [itm if i not in [2, 5] else -0.6
+        "car": [itm if i not in [2, 5] else -0.93897414
         for i, itm in enumerate(cfg_.TASK["valid_range"])],
-        "bus": [itm if i not in [2, 5] else  -1.0
+        "bus": [itm if i not in [2, 5] else  -0.0715754
         for i, itm in enumerate(cfg_.TASK["valid_range"])],
-        "truck": [itm if i not in [2, 5] else 0
+        "truck": [itm if i not in [2, 5] else -0.37937912
         for i, itm in enumerate(cfg_.TASK["valid_range"])],
-        "pedestrian": [itm if i not in [2, 5] else -0.6
+        "pedestrian": [itm if i not in [2, 5] else -0.73911038
         for i, itm in enumerate(cfg_.TASK["valid_range"])],
-        "construction_vehicle": [itm if i not in [2, 5] else 0.6
+        "construction_vehicle": [itm if i not in [2, 5] else -0.08168083
         for i, itm in enumerate(cfg_.TASK["valid_range"])],
-        "traffic_cone": [itm if i not in [2, 5] else -0.6
+        "traffic_cone": [itm if i not in [2, 5] else -1.27868911
         for i, itm in enumerate(cfg_.TASK["valid_range"])],
-        "bicycle": [itm if i not in [2, 5] else -1.0
+        "bicycle": [itm if i not in [2, 5] else -1.03743013
         for i, itm in enumerate(cfg_.TASK["valid_range"])],
-        "motorcycle": [itm if i not in [2, 5] else -1.0
+        "motorcycle": [itm if i not in [2, 5] else -0.99194854
         for i, itm in enumerate(cfg_.TASK["valid_range"])],
-        "trailer": [itm if i not in [2, 5] else -0.6
+        "trailer": [itm if i not in [2, 5] else 0.22228277
         for i, itm in enumerate(cfg_.TASK["valid_range"])],
-        "barrier": [itm if i not in [2, 5] else 0
+        "barrier": [itm if i not in [2, 5] else -1.27247968
         for i, itm in enumerate(cfg_.TASK["valid_range"])],
     }
     class2anchor_size = {
@@ -256,28 +256,28 @@ def modify_cfg(cfg_):
         "traffic_cone": [0.41, 0.41, 1.07],
     }
     class2anchor_match_th = {
-        "car": 0.6,
-        "truck": 0.6,
-        "construction_vehicle": 0.6,
-        "bus": 0.6,
-        "trailer": 0.6,
-        "barrier": 0.35,
-        "motorcycle": 0.35,
-        "bicycle": 0.35,
-        "pedestrian": 0.35,
-        "traffic_cone": 0.35,
-    }
-    class2anchor_unmatch_th = {
-        "car": 0.45,
-        "truck": 0.45,
-        "construction_vehicle": 0.45,
-        "bus": 0.45,
-        "trailer": 0.45,
-        "barrier": 0.2,
+        "car": 0.25,
+        "truck": 0.5,
+        "construction_vehicle": 0.4,
+        "bus": 0.5,
+        "trailer": 0.5,
+        "barrier": 0.3,
         "motorcycle": 0.2,
         "bicycle": 0.2,
-        "pedestrian": 0.2,
-        "traffic_cone": 0.2,
+        "pedestrian": 0.5,
+        "traffic_cone": 0.5,
+    }
+    class2anchor_unmatch_th = {
+        "car": 0.2,
+        "truck": 0.35,
+        "construction_vehicle": 0.3,
+        "bus": 0.35,
+        "trailer": 0.35,
+        "barrier": 0.2,
+        "motorcycle": 0.15,
+        "bicycle": 0.15,
+        "pedestrian": 0.35,
+        "traffic_cone": 0.35,
     }
     for cls in class_list:
         key = f"class_settings_{cls}"
@@ -312,6 +312,6 @@ def modify_cfg(cfg_):
         cfg_.NETWORK["@loss_dict"]["DistillationClassificationLoss"]["code_weights"] = [1.0] * num_old_classes
 
 def check_cfg(cfg_):
-    assert cfg_.TARGETASSIGNER["class_settings_car"]["AnchorGenerator"]["@anchor_ranges"][2] == -0.6
-    assert cfg_.TARGETASSIGNER["class_settings_car"]["AnchorGenerator"]["@anchor_ranges"][-1] == -0.6
+    assert cfg_.TARGETASSIGNER["class_settings_car"]["AnchorGenerator"]["@anchor_ranges"][2] == -0.93897414
+    assert cfg_.TARGETASSIGNER["class_settings_car"]["AnchorGenerator"]["@anchor_ranges"][-1] == -0.93897414
     return True
