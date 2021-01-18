@@ -131,7 +131,7 @@ cfg.NETWORK = {
     "@classes_target": ["Car", "Pedestrian", "Cyclist", "Van", "Truck"],
     "@classes_source": None,
     "@model_resume_dict": {
-        "ckpt_path": "saved_weights/20200825-expkitti2+3/20200825-expkitti2+3-lwf_threshold/IncDetMain-33240.tckpt",
+        "ckpt_path": "saved_weights/collections/kitti-B3to5-kdthreshold/kitti-B3to5-kdthreshold.tckpt",
         "num_classes": 5,
         "num_anchor_per_loc": 10,
         "partially_load_params": [],

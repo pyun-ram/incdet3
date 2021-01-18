@@ -125,19 +125,15 @@ cfg.TESTDATA = {
         "@filter_label_dict": dict(),
         "@feature_map_size": None # TBD in dataloader_builder.py
     },
-    "prep_infos": {
-        "@valid_range": cfg.TASK["valid_range"],
-        "@target_classes": ["Car", "Pedestrian"]
-    }
 }
 
 cfg.NETWORK = {
     "@classes_target": ["Car", "Pedestrian", "Cyclist", "Van", "Truck"],
     "@classes_source": None,
     "@model_resume_dict": {
-        "ckpt_path": "saved_weights/collections/kitti-B3to5-finetune/kitti-B3to5-finetune.tckpt",
-        "num_classes": 2,
-        "num_anchor_per_loc": 4,
+        "ckpt_path": "saved_weights/collections/kitti-A1to5/kitti-A1to5.tckpt",
+        "num_classes": 5,
+        "num_anchor_per_loc": 10,
         "partially_load_params": [],
         "ignore_params": [],
     },
