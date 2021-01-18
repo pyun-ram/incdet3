@@ -320,7 +320,7 @@ def log_train_info(info, itr):
         Logger().log_tsbd_scalor(f"train/{k}", v, itr)
     Logger().log_tsbd_scalor("train/lr", info["lr"], itr)
 
-def val_one_epoch(model, dataloader):
+def val_one_epoch(model, dataloader, x_range=None, y_range=None):
     model.eval()
     detections = []
     for data in tqdm(dataloader):
@@ -338,6 +338,14 @@ def val_one_epoch(model, dataloader):
             detections,
             output_dir=g_log_dir,
             label_dir=label_dir)
+    elif 'NuscenesKittiDataset' in dataset_type:
+        label_dir = os.path.join(dataloader.dataset._root_path, "label_2")
+        eval_res = dataloader.dataset.evaluation(
+            detections,
+            output_dir=g_log_dir,
+            label_dir=label_dir,
+            x_range=x_range,
+            y_range=y_range)
     else:
         eval_res = dataloader.dataset.evaluation(detections)
     info = {
@@ -423,8 +431,12 @@ def vis_fn_kitti(data_dir,
         "label": True,
         "velodyne": True
     }
-    calib, _, label, pc = KittiData(data_dir,
-        idx,output_dict=output_dict).read_data()
+    if "nusc" in data_dir:
+        calib, _, label, pc = KittiData(data_dir,
+            idx,output_dict=output_dict).read_data(num_feature=5)
+    else:
+        calib, _, label, pc = KittiData(data_dir,
+            idx,output_dict=output_dict).read_data()
     bevimg = BEVImage(x_range, y_range, grid_size)
     bevimg.from_lidar(pc)
     for obj in label.data:
@@ -562,7 +574,9 @@ def train(cfg):
             ert = (time_elapsed / iter_elapsed * (max_iter - model.get_global_step()))
             print(f"Estimated time remaining: {int(ert / 60):d} min {int(ert % 60):d} s")
         if model.get_global_step() % num_val_iter == 0 or model.get_global_step() >= max_iter:
-            val_info = val_one_epoch(model, dataloader_val)
+            val_info = val_one_epoch(model, dataloader_val,
+                x_range=(cfg.TASK["valid_range"][0], cfg.TASK["valid_range"][3]),
+                y_range=(cfg.TASK["valid_range"][1], cfg.TASK["valid_range"][4]))
             log_val_info(val_info, model.get_global_step(),
                 vis_param_dict={
                     "data_dir": cfg.VALDATA["@root_path"],

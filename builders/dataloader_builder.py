@@ -14,6 +14,7 @@ from incdet3.data.kittipreproc import prep_pointcloud as prep_func_kitti
 from incdet3.data.kittipreproc import prep_info as prep_info_func_kitti
 from incdet3.data.kittidataset import KittiDataset
 from incdet3.data.nuscenes_dataset import NuScenesDataset
+from incdet3.data.nusckitti_dataset import NuscenesKittiDataset
 
 def create_anchor_cache(target_assigner,
     feature_map_size,
@@ -26,7 +27,7 @@ def create_anchor_cache(target_assigner,
         return anchor_creating_carla(target_assigner,
             feature_map_size,
             anchor_cache=None)
-    elif dataset_name == "kitti":
+    elif dataset_name in ["kitti", "nusc-kitti"]:
         return anchor_creating_kitti(target_assigner,
             feature_map_size,
             anchor_cache=None)
@@ -47,7 +48,7 @@ def build_prep_func(voxelizer,
         prep_func = partial(prep_func_carla, **params)
     elif dataset_name == "nusc":
         prep_func = partial(prep_func_carla, **params)
-    elif dataset_name == "kitti":
+    elif dataset_name in ["kitti", "nusc-kitti"]:
         prep_func = partial(prep_func_kitti, **params)
     else:
         raise NotImplementedError
@@ -60,7 +61,7 @@ def build_prep_info_func(prep_info_cfg, dataset_name):
         prep_info_func = partial(prep_info_func_carla, **params)
     elif dataset_name == "nusc":
         prep_info_func = partial(prep_info_func_carla, **params)
-    elif dataset_name == "kitti":
+    elif dataset_name in ["kitti", 'nusc-kitti']:
         prep_info_func = partial(prep_info_func_kitti, **params)
     else:
         raise NotImplementedError
@@ -82,6 +83,9 @@ def build_dataset(
     elif dataset_name == "kitti":
         params["prep_info_func"] = prep_info_func
         dataset = KittiDataset(**params)
+    elif dataset_name == "nusc-kitti":
+        params["prep_info_func"] = prep_info_func
+        dataset = NuscenesKittiDataset(**params)
     else:
         raise NotImplementedError
     return dataset
