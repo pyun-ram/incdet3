@@ -14,7 +14,7 @@ from incdet3.data.kittipreproc import prep_pointcloud as prep_func_kitti
 from incdet3.data.kittipreproc import prep_info as prep_info_func_kitti
 from incdet3.data.kittidataset import KittiDataset
 from incdet3.data.nuscenes_dataset import NuScenesDataset
-from incdet3.data.nusckitti_dataset import NuscenesKittiDataset
+# from incdet3.data.nusckitti_dataset import NuscenesKittiDataset
 
 def create_anchor_cache(target_assigner,
     feature_map_size,
