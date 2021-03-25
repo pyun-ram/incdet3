@@ -5,16 +5,10 @@ import torch
 import numpy as np
 from functools import partial
 from det3.utils.utils import is_param, proc_param
-from incdet3.data.carlapreproc import anchor_creating as anchor_creating_carla
-from incdet3.data.carlapreproc import prep_pointcloud as prep_func_carla
-from incdet3.data.carlapreproc import prep_info as prep_info_func_carla
-from incdet3.data.carladataset import CarlaDataset
 from incdet3.data.kittipreproc import anchor_creating as anchor_creating_kitti
 from incdet3.data.kittipreproc import prep_pointcloud as prep_func_kitti
 from incdet3.data.kittipreproc import prep_info as prep_info_func_kitti
 from incdet3.data.kittidataset import KittiDataset
-from incdet3.data.nuscenes_dataset import NuScenesDataset
-# from incdet3.data.nusckitti_dataset import NuscenesKittiDataset
 
 def create_anchor_cache(target_assigner,
     feature_map_size,
