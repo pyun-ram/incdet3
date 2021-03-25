@@ -10,13 +10,8 @@ cd /usr/app
 git clone https://github.com/NVIDIA/apex
 cd apex
 pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./
-# echo "export PYTHONPATH=\${PYTHONPATH}:/usr/app/nuscenes-devkit-pyun/python-sdk:/usr/app/" >> /root/.bashrc
-# source /root/.bashrc
 
 cd /usr/app
-git clone https://git.ram-lab.com/yun/det3.git -b dev-v01
+git clone https://github.com/pyun-ram/det3 -b release
 
-cd /usr/app
-git clone https://git.ram-lab.com/yun/second.pytorch
-echo "export PYTHONPATH=/usr/app/:/usr/app/second.pytorch" >> /root/.bashrc
 source /root/.bashrc
