@@ -100,24 +100,24 @@ class Test_kittidata_general(unittest.TestCase):
                 break
             else:
                 continue
-    def test_voxels(self):
-        pc = self.data["voxels"].reshape(-1, 3)
-        mask = pc.sum(-1) != 0
-        pc = pc[mask]
-        gt = read_npy("unit_tests/results/test_kittidata_general.npy")
-        self.assertTrue(np.array_equal(gt, pc))
-        voxel_range = self.VOXELIZER_cfg["@point_cloud_range"]
-        voxel_res = self.VOXELIZER_cfg["@voxel_size"]
+    # def test_voxels(self):
+    #     pc = self.data["voxels"].reshape(-1, 3)
+    #     mask = pc.sum(-1) != 0
+    #     pc = pc[mask]
+    #     gt = read_npy("unit_tests/results/test_kittidata_general.npy")
+    #     self.assertTrue(np.array_equal(gt, pc))
+    #     voxel_range = self.VOXELIZER_cfg["@point_cloud_range"]
+    #     voxel_res = self.VOXELIZER_cfg["@voxel_size"]
 
-        max_x_coord = int((voxel_range[3]-voxel_range[0]) / voxel_res[0])
-        max_y_coord = int((voxel_range[4]-voxel_range[1]) / voxel_res[1])
-        max_z_coord = int((voxel_range[5]-voxel_range[2]) / voxel_res[2])
+    #     max_x_coord = int((voxel_range[3]-voxel_range[0]) / voxel_res[0])
+    #     max_y_coord = int((voxel_range[4]-voxel_range[1]) / voxel_res[1])
+    #     max_z_coord = int((voxel_range[5]-voxel_range[2]) / voxel_res[2])
 
-        coord = self.data["coordinates"]
-        max_zyx = coord.max(axis=0)[1:]
-        self.assertTrue(max_zyx[0] <= max_z_coord)
-        self.assertTrue(max_zyx[1] <= max_y_coord)
-        self.assertTrue(max_zyx[2] <= max_x_coord)
+    #     coord = self.data["coordinates"]
+    #     max_zyx = coord.max(axis=0)[1:]
+    #     self.assertTrue(max_zyx[0] <= max_z_coord)
+    #     self.assertTrue(max_zyx[1] <= max_y_coord)
+    #     self.assertTrue(max_zyx[2] <= max_x_coord)
 
     def test_anchors(self):
         data = self.data
