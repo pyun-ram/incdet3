@@ -33,6 +33,10 @@ You can download our [weights](http://gofile.me/4jm56/DbSl0zfvs) for reproducing
 
 3.Run the scripts in the docker container, like
 ./run_scripts/exp-kitti-2+seq/eval_on_old_tasks.sh 0 # Use GPUID=0
+./run_scripts/exp-kitti-2+seq/eval_on_new_tasks.sh 0 # Use GPUID=0
+./run_scripts/exp-kitti-2+seq/eval_on_all_tasks.sh 0 # Use GPUID=0
+
+
 
 4.Collect the results using the jupyter script: 
 jupyterscripts/20210118-collect_eval_results_kitti.ipynb
