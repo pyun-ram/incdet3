@@ -16,7 +16,10 @@ This repository is for task-incremental-learning in LiDAR-based 3D object detect
 # e.g. CUDA10.1
 cd Dockerfiles
 docker build ./peng-incdet3-pytorch1.4_cu10.1_spconv -t <dockerimage-tag>/incdet3:latest
-docker run -it --name incdet3 --gpus all -p 8001:8888 <dockerimage-tag>/incdet3:latest
+docker run -it --name incdet3 --gpus all -p 8001:8888 -v <root-dir>:/usr/app <dockerimage-tag>/incdet3:latest
+# inside your docker container, run
+cd /usr/app/incdet3
+./run_scripts/setup.sh
 ```
 
 ## Usage
